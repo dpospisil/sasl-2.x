@@ -4,10 +4,10 @@
 First of all edit cmake.config and set correct paths.
 
 ### Linux & Mac
-mkdir build
-cd build
-cmake ..
-make
+* mkdir build
+* cd build
+* cmake ..
+* make
 
 ### Windows
 
