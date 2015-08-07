@@ -113,7 +113,7 @@ struct NetProps
 
     ~NetProps() {
         for (std::vector<PropValue*>::iterator i = values.begin();
-                i != values.end(); i++)
+                i != values.end(); ++i)
             delete *i;
     }
 };
@@ -169,7 +169,7 @@ int PropValue::sendPropUpdate()
         case PROP_FLOAT: buf.addFloat(lastValue.floatValue);  return 0;
         case PROP_DOUBLE: buf.addDouble(lastValue.doubleValue);  return 0;
         case PROP_STRING: 
-            int len = 0;
+            std::size_t len = 0;
             if (lastValue.buf)
                 len = strlen(lastValue.buf);
             buf.addUint16(len);
@@ -272,7 +272,7 @@ int PropValue::getString(char *buf, int maxSize, int *err)
                     *err = 1;
                 return 0;
         }
-        int len = s.length();
+        std::size_t len = s.length();
         if ((len + 1 > maxSize) || (! buf)) {
             if (err)
                 *err = 1;
@@ -285,7 +285,7 @@ int PropValue::getString(char *buf, int maxSize, int *err)
                 strcpy(buf, "");
             return 0;
         } else {
-            int len = strlen(lastValue.buf);
+            std::size_t len = strlen(lastValue.buf);
             if (maxSize < len + 1) {
                 if (err)
                     *err = 1;
@@ -307,11 +307,10 @@ int PropValue::setString(const char *newValue)
         case PROP_FLOAT: lastValue.floatValue = strToFloat(newValue);  break;
         case PROP_DOUBLE: lastValue.doubleValue = strToDouble(newValue); break;
         case PROP_STRING: 
-            int len = strlen(newValue);
+            std::size_t len = strlen(newValue);
             if ((! lastValue.buf) || (len + 1 > lastValue.maxBufSize)) {
                 lastValue.maxBufSize = len + 20;
-                if (lastValue.buf)
-                    free(lastValue.buf);
+                free(lastValue.buf);
                 lastValue.buf = (char*)malloc(lastValue.maxBufSize);
             }
             strcpy(lastValue.buf, newValue);
@@ -342,11 +341,10 @@ void PropValue::parse(const unsigned char *data, int revision)
             lastValue.doubleValue = netToDouble(data); 
             break;
         case PROP_STRING: 
-            int len = netToInt16(data);
+            std::size_t len = (std::size_t)netToInt16(data);
             if ((! lastValue.buf) || (len + 1 > lastValue.maxBufSize)) {
                 lastValue.maxBufSize = len + 20;
-                if (lastValue.buf)
-                    free(lastValue.buf);
+                free(lastValue.buf);
                 lastValue.buf = (char*)malloc(lastValue.maxBufSize);
             }
             memcpy(lastValue.buf, data + 2, len);
@@ -533,8 +531,7 @@ static int setPropString(SaslPropRef prop, const char *newValue)
 static void doneProps(SaslProps props)
 {
     NetProps *p = (NetProps*)props;
-    if (p)
-        delete p;
+    delete p;
 }
 
 

@@ -222,7 +222,13 @@ function createComponent(name, parent)
         componentsByName = { },
         size = { 100, 100 },
         position = createProperty { 0, 0, 100, 100 },
-        clip = createProperty(false),
+        mask = createProperty(false),
+		renderTarget = -1,
+		fpslimit = createProperty(-1),
+		frames = 0,
+		noRenderSignal = false,
+		clip = createProperty(false),
+		clip_size = createProperty { 0, 0, 0, 0 },
         draw = function (comp) drawAll(comp.components); end,
         update = function (comp) updateAll(comp.components); end,
         name = name,
@@ -458,24 +464,59 @@ function updateAll(table)
     end
 end
 
+-- draw to component render target
+function renderToTarget(v) 
+	setRenderTarget(v.renderTarget, 1)
+	v:draw()
+	restoreRenderTarget()
+end
+
 -- draw component
 function drawComponent(v)
     if v and toboolean(get(v.visible)) then
         saveGraphicsContext()
-        local pos = get(v.position)
-        setTranslation(pos[1], pos[2], pos[3], pos[4], v.size[1], v.size[2])
-        local clip = toboolean(get(v.clip))
-        if clip then
-            setClipArea(0, 0, v.size[1], v.size[2])
-        end
-        v:draw()
-        if clip then
-            resetClipArea()
-        end
-        restoreGraphicsContext()
+        local renderTargetExist = toboolean(get(v.mask))
+        if renderTargetExist then
+			if not v.noRenderSignal then
+				local cur_fps = 1.0 / get(globalPropertyf("sim/operation/misc/frame_rate_period"))
+				local limit = get(v.fpslimit)
+				if limit == -1 or limit >= cur_fps then
+					renderToTarget(v)
+					v.frames = 0
+				else 
+					if v.frames > cur_fps / limit then
+						renderToTarget(v)
+						v.frames = 0
+					else 
+						v.frames = v.frames + 1
+					end
+				end
+			end
+			local pos = get(v.position)
+			setTranslation(pos[1], pos[2], pos[3], pos[4], v.size[1], v.size[2])
+			drawRenderTarget(v.renderTarget, 0, 0, v.size[1], v.size[2], 1, 1, 1, 1)
+			v.noRenderSignal = false
+        else
+			local pos = get(v.position)
+			setTranslation(pos[1], pos[2], pos[3], pos[4], v.size[1], v.size[2])
+			local clip = toboolean(get(v.clip))
+			local cs = get(v.clip_size) and get(v.clip_size) or {pos[1], pos[2], pos[1]+pos[3], pos[2]+pos[4]}			
+			local clip_size = cs[3] > 0 and cs[4] > 0
+			if clip then				
+				if clip_size then					
+					setClipArea(cs[1],cs[2],cs[3],cs[4])				
+				else
+					setClipArea(0, 0, v.size[1], v.size[2])
+				end
+			end
+			v:draw()
+			if clip then
+				resetClipArea()
+			end
+		end 
+		restoreGraphicsContext()
     end
 end
-
 
 -- draw all components from table
 function drawAll(table)
@@ -648,6 +689,15 @@ function loadComponent(name, fileName)
         setfenv(f, t)
         f()
         finishComponentsCreation()
+		
+		if get(t.fpslimit) ~= -1 then
+			set(t.mask, true)
+		end
+		
+		if toboolean(get(t.mask)) then
+			t.renderTarget = getNewRenderTargetID(t.size[1], t.size[2])
+		end
+		
         if subdir then
             popSearchPath()
         end
@@ -1100,7 +1150,9 @@ function subpanel(tbl)
     end
     local c = createComponent(name, popups)
     set(c.position, tbl.position)
-    set(c.clip, tbl.clip)
+	set(c.clip, tbl.clip)
+	set(c.clip_size, tbl.clip_size)
+    set(c.mask, tbl.mask)
     c.size = { tbl.position[3], tbl.position[4] }
     c.onMouseClick = function (comp, x, y, button, parentX, parentY)
         defaultOnMouseClick(comp, x, y, button, parentX, parentY)
@@ -1395,5 +1447,78 @@ end
 -- called whenever the user adjusts the number of X-Plane aircraft models
 function onAirplaneCountChanged()
     callCallbackForAll("onAirplaneCountChanged")
+end
+
+-- merges two tables 
+function table.merge(t1, t2) 
+	t={}
+	for k,v in ipairs(t1) do
+	table.insert(t, v)
+	end 
+	for k,v in ipairs(t2) do
+	table.insert(t, v)
+	end 
+	return t 
+end
+
+-- extracts N-dimensinal table into one table
+local function extractArrayData(arr) 
+	if assert(type(arr[1]))~='table' then     
+		return arr    
+	else
+		local res={}  
+		for i=1, #arr do   
+			res = table.merge(res, extractArrayData(arr[i]))      
+		end
+		return res
+	end
+end
+
+-- creates new interpolator, returns its handle
+function newInterpolator(...)
+	local arg={...}
+	local input = {}
+	local value = {}
+	
+	if #arg == 1 then --and #arg[1]==2 and #arg[1][1]==#arg[1][2] then
+		input = {arg[1][1]}
+		value = {arg[1][2]}
+		return newCPPInterpolator(input, value)		
+	end
+	
+	local N = #arg-1
+	local M = #arg[N+1]
+	local matrix = arg[N+1]			
+	local size=1
+	
+	
+ 
+	if N==0 then 
+		error('number of input arguments into an interpolator must be greater than zero')
+		return
+	end
+ 
+ 
+	for i=1,N do
+		input[i] = arg[i]  
+		size = size*#arg[i]  
+	end
+ 
+	for i=1,M do
+		local val = matrix[i]     
+		value[i] = extractArrayData(val)  
+		if #value[i]~=size then 
+			error('size dimensions mismatch')
+			return
+		end
+	end
+	
+	return newCPPInterpolator(input, value)
+end
+
+function interpolate(x, interp, flag)
+	if assert(type(x))=='number' then  x={x} end
+	res = interpolateCPP(interp, x, flag)
+	return #res==1 and res[1] or res
 end
 

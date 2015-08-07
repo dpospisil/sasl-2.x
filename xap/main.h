@@ -17,6 +17,7 @@ extern SASL sasl;
 void reloadPanel(bool keepProps);
 
 std::string getAircraftDir();
+std::string getAircraftFullPath();
 
 };
 

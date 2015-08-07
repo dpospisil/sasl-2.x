@@ -94,120 +94,120 @@ class TexturePart
 
 
 /// Textures manager
-class TextureManager
-{
-    private:
-        /// Textures mapped by file name
-        typedef std::map<std::string, Texture*> TexturesMap;
+	class TextureManager
+	{
+	private:
+		/// Textures mapped by file name
+		typedef std::map<std::string, Texture*> TexturesMap;
 
-        /// Textures cache
-        TexturesMap cache;
-        
-        /// Textures parts mapped by part name
-        typedef std::map<std::string, TexturePart*> TexturesParts;
+		/// Textures cache
+		TexturesMap cache;
 
-        /// Textures parts cache
-        TexturesParts partsByName;
+		/// Textures parts mapped by part name
+		typedef std::map<std::string, TexturePart*> TexturesParts;
 
-        /// Graphics funtions
-        SaslGraphicsCallbacks *graphics;
+		/// Textures parts cache
+		TexturesParts partsByName;
 
-        /// texture loader buffer
-        unsigned char *buffer;
+		/// Graphics functions
+		SaslGraphicsCallbacks *graphics;
 
-        /// length of allocated buffer
-        int bufLength;
-        
-        /// Textures mapped by file name
-        typedef std::list<Texture*> TexturesList;
+		/// texture loader buffer
+		unsigned char *buffer;
 
-        /// List of all loaded textures
-        TexturesList loaded;
-        
-        /// List of texture parts
-        typedef std::list<TexturePart*> PartsList;
-        
-        /// list of texture parts loaded
-        PartsList partsLoaded;
-        
-    public:
-        /// Create texture manager
-        TextureManager();
+		/// length of allocated buffer
+		std::size_t bufLength;
 
-        /// Destroy texture manager and all cached textures
-        ~TextureManager();
+		/// Textures mapped by file name
+		typedef std::list<Texture*> TexturesList;
 
-    public:
-        /// Load entire texture
-        TexturePart* load(const std::string &path);
-        
-        /// Load center part of texture
-        TexturePart* load(const std::string &path, double width, double height);
-        
-        /// Load part of texture
-        TexturePart* load(const std::string &path, double x, double y,
-                double width, double height);
+		/// List of all loaded textures
+		TexturesList loaded;
 
-        /// Load entire texture from memory
-        TexturePart* load(const unsigned char *buffer, int length);
-        
-        /// Load center part of texture
-        TexturePart* load(const unsigned char *buffer, int length, 
-                double width, double height);
-        
-        /// Load part of texture
-        TexturePart* load(const unsigned char *buffer, int length, 
-                double x, double y, double width, double height);
+		/// List of texture parts
+		typedef std::list<TexturePart*> PartsList;
 
-        /// Add external texture
-        TexturePart* addForeignTexture(int texId);
+		/// list of texture parts loaded
+		PartsList partsLoaded;
 
-        /// Unload texture from memory
-        /// It is completele removes texture from memory
-        /// Use it on your own risk!
-        void unload(TexturePart *texturePart);
+	public:
+		/// Create texture manager
+		TextureManager();
 
-        /// Unload all textures
-        void unloadAll();
+		/// Destroy texture manager and all cached textures
+		~TextureManager();
 
-        /// set graphics callbacks
-        void setGraphicsCallbacks(struct SaslGraphicsCallbacks *graphics);
+	public:
+		/// Load entire texture
+		TexturePart* load(const std::string &path);
 
-        /// Returns graphics API
-        SaslGraphicsCallbacks* getGraphics() { return graphics; }
+		/// Load center part of texture
+		TexturePart* load(const std::string &path, double width, double height);
 
-    private:
-        /// Load image from memory.
-        Texture* loadImage(const unsigned char *buffer, int length);
+		/// Load part of texture
+		TexturePart* load(const std::string &path, double x, double y,
+			double width, double height);
 
-        /// Load image from file or return cached image if already loaded.
-        Texture* loadImage(const std::string &fileName);
+		/// Load entire texture from memory
+		TexturePart* load(const unsigned char *buffer, std::size_t length);
 
-        /// Returns texture coords which covers entire image
-        void getPartCoords(Texture *texture, double &x1, double &y1,
-                double &x2, double &y2);
-        
-        /// Returns texture coords which covers rectangle in image center
-        void getPartCoords(Texture *texture, double width, double height,
-                double &x1, double &y1, double &x2, double &y2);
-        
-        /// Returns texture coords which covers rectangle in image
-        void getPartCoords(Texture *texture, 
-                double x, double y, double width, double height,
-                double &x1, double &y1, double &x2, double &y2);
+		/// Load center part of texture
+		TexturePart* load(const unsigned char *buffer, std::size_t length,
+			double width, double height);
 
-        /// Returns name of texture part
-        std::string getPartName(const std::string& fileName, 
-                double x1, double y1, double x2, double y2);
+		/// Load part of texture
+		TexturePart* load(const unsigned char *buffer, std::size_t length,
+			double x, double y, double width, double height);
 
-        /// Returns texture and texture coords
-        TexturePart* getTexturePart(const std::string &fileName, 
-            Texture *texture, double x1, double y1, double x2, double y2);
-        
-        /// Returns texture and texture coords
-        TexturePart* getTexturePart(Texture *texture, 
-                double x1, double y1, double x2, double y2);
-};
+		/// Add external texture
+		TexturePart* addForeignTexture(int texId);
+
+		/// Unload texture from memory
+		/// It is completely removes texture from memory
+		/// Use it on your own risk!
+		void unload(TexturePart *texturePart);
+
+		/// Unload all textures
+		void unloadAll();
+
+		/// set graphics callbacks
+		void setGraphicsCallbacks(struct SaslGraphicsCallbacks *graphics);
+
+		/// Returns graphics API
+		SaslGraphicsCallbacks* getGraphics() { return graphics; }
+
+	private:
+		/// Load image from memory.
+		Texture* loadImage(const unsigned char *buffer, std::size_t length);
+
+		/// Load image from file or return cached image if already loaded.
+		Texture* loadImage(const std::string &fileName);
+
+		/// Returns texture coords which covers entire image
+		void getPartCoords(Texture *texture, double &x1, double &y1,
+			double &x2, double &y2);
+
+		/// Returns texture coords which covers rectangle in image center
+		void getPartCoords(Texture *texture, double width, double height,
+			double &x1, double &y1, double &x2, double &y2);
+
+		/// Returns texture coords which covers rectangle in image
+		void getPartCoords(Texture *texture,
+			double x, double y, double width, double height,
+			double &x1, double &y1, double &x2, double &y2);
+
+		/// Returns name of texture part
+		std::string getPartName(const std::string& fileName,
+			double x1, double y1, double x2, double y2);
+
+		/// Returns texture and texture coords
+		TexturePart* getTexturePart(const std::string &fileName,
+			Texture *texture, double x1, double y1, double x2, double y2);
+
+		/// Returns texture and texture coords
+		TexturePart* getTexturePart(Texture *texture,
+			double x1, double y1, double x2, double y2);
+	};
 
 
 /// Register functions in Lua

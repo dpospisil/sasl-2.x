@@ -188,7 +188,7 @@ static void printToLog(int level, const char *message)
         default: sprintf(levelStr, "ERROR");
     }
 
-    int msgLen = 20 + strlen(levelStr) + strlen(message);
+    std::size_t msgLen = 20 + strlen(levelStr) + strlen(message);
     char *buf = (char*)alloca(msgLen);
     sprintf(buf, "SASL %s: %s\n", levelStr, message);
     XPLMDebugString(buf);
@@ -266,6 +266,14 @@ std::string xap::getAircraftDir()
     return dir;
 }
 
+/// Returns full path of current aircraft
+std::string xap::getAircraftFullPath() {
+	char model[512], path[512];
+	XPLMGetNthAircraftModel(0, model, path);
+
+	std::string full_path = carbonPathToPosixPath(std::string(path));
+	return full_path;
+}
 
 /// Returns path to aircraft panel
 static std::string getPanelPath(const std::string &aircraftDir)
@@ -428,6 +436,12 @@ static int drawAirplanes(XPLMDrawingPhase phase, int isBefore, void *refcon)
     return 1;
 }
 
+//draw last_scene additions
+static int drawLastScene(XPLMDrawingPhase phase, int isBefore, void *refcon)
+{
+	draw3d(phase);
+	return 1;
+}
 
 // reset draw phase
 static int drawLast2d(XPLMDrawingPhase phase, int isBefore, void *refcon)
@@ -916,36 +930,64 @@ PLUGIN_API void XPluginDisable(void)
     disabled = true;
     XPLMDestroyWindow(fakeWindow);
     freeAvionics(false);
+
+	XPLMUnregisterDrawCallback(drawGauges, xplm_Phase_Gauges, 0, NULL);
+	XPLMUnregisterDrawCallback(drawPopups, xplm_Phase_Window, 0, NULL);
+	XPLMUnregisterDrawCallback(drawScene, xplm_Phase_Objects, 0, NULL);
+	XPLMUnregisterDrawCallback(drawLast2d, xplm_Phase_Window, 0, NULL);
+	XPLMUnregisterDrawCallback(drawAirplanes, xplm_Phase_Airplanes, 0, NULL);
+	XPLMUnregisterDrawCallback(drawLastScene, xplm_Phase_LastScene, 0, NULL);
 }
 
 
 // enable plugin
 PLUGIN_API int XPluginEnable(void)
 {
-    options = Options(getConfigFileName());
+	static std::size_t enablingCounter = 0;
+	std::string selfEnableFilePath = getAircraftDir() + "/plugins/sasl/data/notselfenable.dat";
+	bool needReloadPanel = !fileDoesExist(selfEnableFilePath);
 
-    disabled = false;
-    if (! XPLMRegisterDrawCallback(drawGauges, xplm_Phase_Gauges, 0, NULL))
-        XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Gauges\n");
-    if (! XPLMRegisterDrawCallback(drawPopups, xplm_Phase_Window, 0, NULL))
-        XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Window\n");
-    if (! XPLMRegisterDrawCallback(drawScene, xplm_Phase_Objects, 0, NULL))
-        XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Objects\n");
-    if (! XPLMRegisterDrawCallback(drawLast2d, xplm_Phase_Window, 0, NULL))
-        XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Window (last 2d)\n");
-    if (! XPLMRegisterDrawCallback(drawAirplanes, xplm_Phase_Airplanes, 0, NULL))
-        XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Airplanes\n");
-    fakeWindow = 0;
-    
-    reloadCommand = XPLMCreateCommand("sasl/reload", "Reload SASL avionics");
-    XPLMRegisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
+	options = Options(getConfigFileName());
 
-    XPLMRegisterKeySniffer(handleKeyboardEvent, 0, NULL);
-    
-    reloadPanel(false);
+	fakeWindow = 0;
 
-    XPLMRegisterFlightLoopCallback(updateAvionics, -1, NULL);
+	reloadCommand = XPLMCreateCommand("sasl/reload", "Reload SASL avionics");
+	XPLMRegisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
 
+	XPLMRegisterKeySniffer(handleKeyboardEvent, 0, NULL);
+
+	if ((fileDoesExist(selfEnableFilePath) && enablingCounter == 0) || 
+		needReloadPanel || enablingCounter > 1) {
+
+		reloadPanel(false);
+	}
+
+	XPLMRegisterFlightLoopCallback(updateAvionics, -5, NULL);
+
+	if (fileDoesExist(selfEnableFilePath) && enablingCounter == 0) {
+		XPLMDebugString("SASL: find no-self-enable option for graphics callbacks, waiting for the Aircraft Plugin Manager or for manual enabling\n");
+		enablingCounter++;
+		disabled = true;
+
+		return 0;
+	}
+
+	disabled = false;
+
+	if (!XPLMRegisterDrawCallback(drawGauges, xplm_Phase_Gauges, 0, NULL))
+		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Gauges\n");
+	if (!XPLMRegisterDrawCallback(drawPopups, xplm_Phase_Window, 0, NULL))
+		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Window\n");
+	if (!XPLMRegisterDrawCallback(drawScene, xplm_Phase_Objects, 0, NULL))
+		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Objects\n");
+	if (!XPLMRegisterDrawCallback(drawLast2d, xplm_Phase_Window, 0, NULL))
+		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Window (last 2d)\n");
+	if (!XPLMRegisterDrawCallback(drawAirplanes, xplm_Phase_Airplanes, 0, NULL))
+		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Airplanes\n");
+	if (!XPLMRegisterDrawCallback(drawLastScene, xplm_Phase_LastScene, 0, NULL))
+		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_LastScene with experimental features\n");
+
+	enablingCounter++;
     return 1;
 }
 

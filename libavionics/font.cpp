@@ -81,32 +81,32 @@ static bool isblank(char ch)
 #endif
 
 /// Returns word from line
-static std::string getKeyword(const std::string &line, int &pos)
+static std::string getKeyword(const std::string &line, std::size_t& pos)
 {
-    int len = line.length();
-    int first = pos;
+    std::size_t len = line.length();
+    std::size_t first = pos;
     while ((pos < len) && (! isblank(line[pos]) && ('=' != line[pos])))
         pos++;
     return line.substr(first, pos - first);
 }
 
 /// Returns quoted text from line
-static std::string getQuoted(const std::string &line, int &pos)
+static std::string getQuoted(const std::string &line, std::size_t& pos)
 {
-    int len = line.length();
+    std::size_t len = line.length();
     char quote = line[pos];
     pos++;
-    int first = pos;
+    std::size_t first = pos;
     while ((pos < len) && (quote != line[pos]))
         pos++;
-    int end = pos;
+    std::size_t end = pos;
     if ((pos < len) && (quote == line[pos]))
         pos++;
     return line.substr(first, end - first);
 }
 
 /// Returns attribute value.  Attribute value is either keyword or quoted string
-static std::string getValue(const std::string &line, int &pos)
+static std::string getValue(const std::string &line, std::size_t& pos)
 {
     if ('"' == line[pos])
         return getQuoted(line, pos);
@@ -116,9 +116,9 @@ static std::string getValue(const std::string &line, int &pos)
 
 
 /// Skip all spaces
-static void skipSpaces(const std::string &line, int &pos)
+static void skipSpaces(const std::string &line, std::size_t& pos)
 {
-    int len = line.length();
+    std::size_t len = line.length();
     while ((pos < len) && isblank(line[pos]))
         pos++;
 }
@@ -134,10 +134,10 @@ static std::string splitLine(const std::string &line, Attrs &attrs)
 {
     attrs.clear();
 
-    int pos = 0;
+    std::size_t pos = 0;
     std::string keyword = getKeyword(line, pos);
 
-    int len = line.length();
+    std::size_t len = line.length();
     while (pos < len) {
         skipSpaces(line, pos);
         if (pos >= len)
@@ -146,7 +146,7 @@ static std::string splitLine(const std::string &line, Attrs &attrs)
         if (pos >= len)
             break;
         if ('=' != line[pos]) {
-            attrs[id] = "";
+            attrs[id].clear();
         } else {
             pos++;
             attrs[id] = getValue(line, pos);
@@ -243,8 +243,8 @@ static Font* loadFont(TextureManager &textureManager,
 /// Free font structures
 static void freeFont(Font* font)
 {
-    if (font)
-        delete font;
+	delete font;
+	font = NULL;
 }
 
 
@@ -263,9 +263,9 @@ int xa::getFontWidth(struct Font* font, const char *str)
         return 0;
 
     std::wstring ws = fromUtf8(str);
-    int len = ws.length();
+    std::size_t len = ws.length();
     int width = 0;
-    for (int i = 0; i < len; i++) {
+    for (std::size_t i = 0; i < len; i++) {
         int chr = ws[i];
         std::map<int, Glyph>::iterator g = font->glyphs.find(chr);
         if (g != font->glyphs.end())
@@ -282,15 +282,16 @@ void xa::drawFont(Font* font, SaslGraphicsCallbacks *graphics, double x, double 
         return;
     
     std::wstring ws = fromUtf8(str);
-    int len = ws.length();
+    std::size_t len = ws.length();
     if (! len)
         return;
 
-    double tW = font->texture->getTexture()->getWidth();
-    double tH = font->texture->getTexture()->getHeight();
+	Texture* text = font->texture->getTexture();
+	double tW = text->getWidth();
+	double tH = text->getHeight();
 
     int posX = x;
-    for (int i = 0; i < len; i++) {
+    for (std::size_t i = 0; i < len; i++) {
         int chr = ws[i];
         std::map<int, Glyph>::iterator gl = font->glyphs.find(chr);
         if (gl != font->glyphs.end()) {
@@ -304,12 +305,12 @@ void xa::drawFont(Font* font, SaslGraphicsCallbacks *graphics, double x, double 
             double gYO = font->base - (glyph.yOffset + gH);
 
             graphics->draw_textured_triangle(graphics, 
-                font->texture->getTexture()->getId(),
+				text->getId(),
                 posX + gXO, y + gH + gYO, gX / tW, gY / tH, r, g, b, a,
                 posX + gXO + gW, y + gH + gYO, (gX + gW) / tW, gY / tH, r, g, b, a,
                 posX + gW + gXO, y + gYO, (gX + gW) / tW, (gY + gH) / tH, r, g, b, a);
             graphics->draw_textured_triangle(graphics, 
-                font->texture->getTexture()->getId(),
+				text->getId(),
                 posX + gW + gXO, y + gYO, (gX + gW) / tW, (gY + gH) / tH, r, g, b, a,
                 posX + gXO, y + gYO, gX / tW, (gY + gH) / tH, r, g, b, a,
                 posX + gXO, y + gH + gYO, gX / tW, gY / tH, r, g, b, a);
@@ -330,7 +331,7 @@ xa::FontManager::FontManager(TextureManager &textureManager):
 
 xa::FontManager::~FontManager()
 {
-    for (FontsMap::iterator i = cache.begin(); i != cache.end(); i++)
+    for (FontsMap::iterator i = cache.begin(); i != cache.end(); ++i)
         freeFont((*i).second);
     cache.clear();
 }

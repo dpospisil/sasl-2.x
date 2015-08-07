@@ -1,7 +1,7 @@
 #ifndef __MATH3D_H__
 #define __MATH3D_H__
 
-
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <string.h>
 

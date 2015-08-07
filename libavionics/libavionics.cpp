@@ -50,7 +50,7 @@ SASL sasl_init(const char *path, sasl_lua_creator_callback luaCreator,
         sasl->avionics = new Avionics(path, luaCreator, luaDestroyer);
         if (sasl->avionics->initLua()) {
             delete sasl->avionics;
-            delete sasl;
+            free(sasl);
             return NULL;
         }
         return sasl;

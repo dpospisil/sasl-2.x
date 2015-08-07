@@ -146,7 +146,7 @@ Commands::~Commands()
 {
     if (callbacks.remove_command_handler)
         for (std::list<CommandHandler>::iterator i = commands.begin(); 
-                i != commands.end(); i++)
+                i != commands.end(); ++i)
         {
             CommandHandler &h = *i;
             callbacks.remove_command_handler(h.command, luaCommandHandler,
@@ -256,7 +256,7 @@ int Commands::unregisterCommandHandler(lua_State *L)
     CommandHandler *handler = NULL;
 
     for (std::list<CommandHandler>::iterator i = commands.begin(); 
-            i != commands.end(); i++)
+            i != commands.end(); ++i)
     {
         CommandHandler &h = *i;
         if ((h.command == command) && (h.before == before)) {

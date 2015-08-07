@@ -31,6 +31,12 @@ static XPLMDataRef viewPitch;
 static XPLMDataRef viewRoll;
 static XPLMDataRef viewHeading;
 
+static XPLMDataRef viewIsExternal;
+static XPLMDataRef localx;
+static XPLMDataRef localy;
+static XPLMDataRef localz;
+static XPLMDataRef quaternion;
+
 /*
 static XPLMDataRef pilotX;
 static XPLMDataRef pilotY;
@@ -48,6 +54,11 @@ static double lastViewPitch;
 static double lastViewRoll;
 static double lastViewHeading;
 //int lastViewType;
+
+static double lastLocalX;
+static double lastLocalY;
+static double lastLocalZ;
+static float lastQuat[4];
 
 //static int viewType3dCockpit = 1026;
 
@@ -69,7 +80,14 @@ void xap3d::initDraw3d()
     viewRoll = XPLMFindDataRef("sim/graphics/view/view_roll");
     viewHeading = XPLMFindDataRef("sim/graphics/view/view_heading");
     hdr_pass_dr = XPLMFindDataRef("sim/graphics/view/plane_render_type");   //! This dataref will exist from X-Plane 10.30 onwards so you don't need the hack anymore
+	
+	viewIsExternal = XPLMFindDataRef("sim/graphics/view/view_is_external");
 
+	localx = XPLMFindDataRef("sim/flightmodel/position/local_x");
+	localy = XPLMFindDataRef("sim/flightmodel/position/local_y");
+	localz = XPLMFindDataRef("sim/flightmodel/position/local_z");
+	quaternion = XPLMFindDataRef("sim/flightmodel/position/q");
+	
     /*
     pilotX = XPLMFindDataRef("sim/graphics/view/pilots_head_x");
     pilotY = XPLMFindDataRef("sim/graphics/view/pilots_head_y");
@@ -526,13 +544,396 @@ static void drawBillboards()
     }
 }
 
+static xap3d::Objects3D ObjectsToDraw;
+
+static int luaDraw3DLine(lua_State* L) {
+	if (lua_isnil(L, 1) || (lua_gettop(L) != 6 && lua_gettop(L) != 10)) {
+		return 0;
+	}
+
+	Line3D* new_line = new Line3D;
+
+	if (lua_gettop(L) == 10) {
+		new_line->mR = (float)lua_tonumber(L, 7);
+		new_line->mG = (float)lua_tonumber(L, 8);
+		new_line->mB = (float)lua_tonumber(L, 9);
+		new_line->mAlpha = (float)lua_tonumber(L, 10);
+	} else {
+		new_line->mR = 1.0f;
+		new_line->mG = 1.0f;
+		new_line->mB = 1.0f;
+		new_line->mAlpha = 1.0f;
+	}
+
+	new_line->mX1 = (float)lua_tonumber(L, 1);
+	new_line->mY1 = (float)lua_tonumber(L, 2);
+	new_line->mZ1 = (float)lua_tonumber(L, 3);
+	new_line->mX2 = (float)lua_tonumber(L, 4);
+	new_line->mY2 = (float)lua_tonumber(L, 5);
+	new_line->mZ2 = (float)lua_tonumber(L, 6);
+
+	ObjectsToDraw.push_back(new_line);
+
+	return 0;
+}
+
+static int luaDraw3DCircle(lua_State* L) {
+	if (lua_isnil(L, 1) || (lua_gettop(L) != 11 && lua_gettop(L) != 9 && lua_gettop(L) != 5)) {
+		return 0;
+	}
+
+	Circle3D* new_circle = new Circle3D;
+
+	if (lua_gettop(L) > 5) {
+		new_circle->mR = (float)lua_tonumber(L, 6);
+		new_circle->mG = (float)lua_tonumber(L, 7);
+		new_circle->mB = (float)lua_tonumber(L, 8);
+		new_circle->mAlpha = (float)lua_tonumber(L, 9);
+	} else {
+		new_circle->mR = 1.0f;
+		new_circle->mG = 1.0f;
+		new_circle->mB = 1.0f;
+		new_circle->mAlpha = 1.0f;
+	}
+
+	new_circle->mX1 = (float)lua_tonumber(L, 1);
+	new_circle->mY1 = (float)lua_tonumber(L, 2);
+	new_circle->mZ1 = (float)lua_tonumber(L, 3);
+	new_circle->mRadius = (float)lua_tonumber(L, 4);
+	new_circle->mFilled = (int)lua_tonumber(L, 5);
+
+	if (lua_gettop(L) == 11) {
+		new_circle->mPitch = (float)lua_tonumber(L, 10);
+		new_circle->mYaw = (float)lua_tonumber(L, 11);
+		new_circle->mHasFixedOrientation = true;
+	} else {
+		new_circle->mHasFixedOrientation = false;
+	}
+
+	ObjectsToDraw.push_back(new_circle);
+
+	return 0;
+}
+
+static int luaDraw3DAngle(lua_State* L) {
+	if (lua_isnil(L, 1) || (lua_gettop(L) != 6 && lua_gettop(L) != 10 && lua_gettop(L) != 12)) {
+		return 0;
+	}
+
+	Angle3D* new_angle = new Angle3D;
+
+	if (lua_gettop(L) > 6) {
+		new_angle->mR = (float)lua_tonumber(L, 7);
+		new_angle->mG = (float)lua_tonumber(L, 8);
+		new_angle->mB = (float)lua_tonumber(L, 9);
+		new_angle->mAlpha = (float)lua_tonumber(L, 10);
+	} else {
+		new_angle->mR = 1.0f;
+		new_angle->mG = 1.0f;
+		new_angle->mB = 1.0f;
+		new_angle->mAlpha = 1.0f;
+	}
+
+	if (lua_gettop(L) > 10) {
+		new_angle->mPitch = (float)lua_tonumber(L, 11);
+		new_angle->mYaw = (float)lua_tonumber(L, 12);
+	} else {
+		new_angle->mPitch = 0.0f;
+		new_angle->mYaw = 0.0f;
+	}
+
+	new_angle->mX1 = (float)lua_tonumber(L, 1);
+	new_angle->mY1 = (float)lua_tonumber(L, 2);
+	new_angle->mZ1 = (float)lua_tonumber(L, 3);
+	new_angle->mAngle = (float)lua_tonumber(L, 4);
+	new_angle->mLenght = (float)lua_tonumber(L, 5);
+	new_angle->mRays = (float)lua_tonumber(L, 6);
+
+	ObjectsToDraw.push_back(new_angle);
+
+	return 0;
+}
+
+static int luaDraw3DStandingCone(lua_State* L) {
+	if (lua_isnil(L, 1) || (lua_gettop(L) != 5 && lua_gettop(L) != 9)) {
+		return 0;
+	}
+
+	StandingCone3D* new_stand_cone = new StandingCone3D;
+
+	if (lua_gettop(L) > 5) {
+		new_stand_cone->mR = (float)lua_tonumber(L, 6);
+		new_stand_cone->mG = (float)lua_tonumber(L, 7);
+		new_stand_cone->mB = (float)lua_tonumber(L, 8);
+		new_stand_cone->mAlpha = (float)lua_tonumber(L, 9);
+	} else {
+		new_stand_cone->mR = 1.0f;
+		new_stand_cone->mG = 1.0f;
+		new_stand_cone->mB = 1.0f;
+		new_stand_cone->mAlpha = 1.0f;
+	}
+
+	new_stand_cone->mX1 = (float)lua_tonumber(L, 1);
+	new_stand_cone->mY1 = (float)lua_tonumber(L, 2);
+	new_stand_cone->mZ1 = (float)lua_tonumber(L, 3);
+	new_stand_cone->mRadius = (float)lua_tonumber(L, 4);
+	new_stand_cone->mHeight = (float)lua_tonumber(L, 5);
+
+	ObjectsToDraw.push_back(new_stand_cone);
+
+	return 0;
+}
+
+void getAngles(float* outBank, float* outAttitude, float* outHeading) {
+	float q[4];
+
+	XPLMGetDatavf(quaternion, q, 0, 4);
+	*outBank = atan2(2 * (q[0] * q[1] + q[2] * q[3]), 1 - 2 * (pow(q[1], 2) + pow(q[2], 2)));
+	*outAttitude = asin(2 * (q[0] * q[2] - q[3] * q[1]));
+	*outHeading = atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (pow(q[2], 2) + pow(q[3], 2)));
+}
+
+Vector rotateToModel(const Vector& inPoint) {
+	float bank, attitude, heading;
+	getAngles(&bank, &attitude, &heading);
+
+	Matrix rotX, rotY, rotZ;
+	rotX = rotateX(attitude);
+	rotY = rotateY(-heading);
+	rotZ = rotateZ(-bank);
+
+	return rotZ * rotX * rotY * inPoint;
+}
+
+Vector rotateToLocal(const Vector& inPoint) {
+	float bank, attitude, heading;
+	getAngles(&bank, &attitude, &heading);
+
+	Matrix rotX, rotY, rotZ;
+	rotX = rotateX(-attitude);
+	rotY = rotateY(heading);
+	rotZ = rotateZ(bank);
+
+	return rotY * rotX * rotZ * inPoint;
+}
+
+static void draw3dAdditions() {
+	XPLMSetGraphicsState(0, 0, 0, 1, 0, 0, 0);
+	if (ObjectsToDraw.size()) {
+		for (Objects3D::const_iterator it = ObjectsToDraw.begin(); it != ObjectsToDraw.end(); ++it) {
+			glPushMatrix();
+			glColor4f((*it)->mR, (*it)->mG, (*it)->mB, (*it)->mAlpha);
+			(*it)->draw_element();
+
+			glPopMatrix();
+		}
+	} 
+}
+
+void Line3D::draw_element() {
+	glBegin(GL_LINES);
+		glVertex3f(mX1, mY1, mZ1);
+		glVertex3f(mX2, mY2, mZ2);
+	glEnd(); 
+}
+
+void Circle3D::setupVertices(std::vector<GLfloat>& verts, const GLsizei& num_segments) {
+	float theta = -2 * M_PI / float(num_segments);
+	float c = cosf(theta);
+	float s = sinf(theta);
+	float t;
+
+	float x = mRadius;
+	float y = 0;
+	float z = 0;
+
+	for (GLsizei i = 0; i < num_segments; i++) {
+		verts[3 + 3 * i] = x + mX1;
+		verts[3 + 3 * i + 1] = y + mY1;
+		verts[3 + 3 * i + 2] = z + mZ1;
+
+		t = x;
+		x = c * x - s * y;
+		y = s * t + c * y;
+	}
+
+	if (mFilled) {
+		verts[0] = mX1;
+		verts[1] = mY1;
+		verts[2] = mZ1;
+
+		verts[num_segments * 3 + 3] = verts[3];
+		verts[num_segments * 3 + 4] = verts[4];
+		verts[num_segments * 3 + 5] = verts[5];
+	}
+}
+
+void Circle3D::draw_element() {
+	GLsizei n_segments = (int)(50 * sqrtf(mRadius));
+	std::vector<GLfloat> vertices;
+	vertices.resize(n_segments * 3 + 6);
+
+	if (mHasFixedOrientation) {
+		setupVertices(vertices, n_segments);
+		glTranslatef(mX1, mY1, mZ1);
+		glRotatef(mPitch, 1.0f, 0.0f, 0.0f);
+		glRotatef(mYaw, 0.0f, 1.0f, 0.0f);
+		glTranslatef(-mX1, -mY1, -mZ1);
+	} else {
+		Vector objToCamProj, lookAt, upAux, objToCam;
+		double angleCosine;
+		Vector Pos;
+		Pos.x = mX1;
+		Pos.y = mY1;
+		Pos.z = mZ1;
+
+		if (viewIsExternal) {
+			Vector curPos;
+			curPos.x = mX1;
+			curPos.y = mY1;
+			curPos.z = mZ1;
+			Pos = rotateToLocal(curPos);
+
+			float q[4];
+			XPLMGetDatavf(quaternion, q, 0, 4);
+			float bank = atan2(2 * (q[0] * q[1] + q[2] * q[3]), 1 - 2 * (pow(q[1], 2) + pow(q[2], 2)));
+			float attitude = asin(2 * (q[0] * q[2] - q[3] * q[1]));
+			float heading = atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (pow(q[2], 2) + pow(q[3], 2)));
+			glRotatef(bank * 180.0 / M_PI, 0.0f, 0.0f, 1.0f);
+			glRotatef(-attitude * 180.0 / M_PI, 1.0f, 0.0f, 0.0f);
+			glRotatef(heading * 180.0 / M_PI, 0.0f, 1.0f, 0.0f);  					
+		}
+
+		mX1 = Pos.x;
+		mY1 = Pos.y;
+		mZ1 = Pos.z;
+		setupVertices(vertices, n_segments);
+
+		glTranslatef(Pos.x, Pos.y, Pos.z);
+
+		objToCamProj.x = (lastViewX - lastLocalX) - Pos.x;
+		objToCamProj.y = 0.0f;
+		objToCamProj.z = (lastViewZ - lastLocalZ) - Pos.z;
+
+		lookAt.x = 0.0f;
+		lookAt.y = 0.0f;
+		lookAt.z = 1.0f;
+
+		objToCamProj.normalize();
+		upAux = crossProduct(lookAt, objToCamProj);
+		angleCosine = dotProduct(lookAt, objToCamProj);
+		glRotatef(acos(angleCosine) * 180 / M_PI, upAux.x, upAux.y, upAux.z);
+	
+		objToCam.x = (lastViewX - lastLocalX) - Pos.x;
+		objToCam.y = (lastViewY - lastLocalY) - Pos.y;
+		objToCam.z = (lastViewZ - lastLocalZ) - Pos.z;
+		objToCam.normalize();
+		angleCosine = dotProduct(objToCamProj, objToCam);
+
+		if (objToCam[1] < 0) {
+			glRotatef(acos(angleCosine) * 180 / M_PI, 1, 0, 0);
+		} else {
+			glRotatef(acos(angleCosine) * 180 / M_PI, -1, 0, 0);
+		}
+
+		glTranslatef(-Pos.x, -Pos.y, -Pos.z); 
+	}
+
+	glVertexPointer(3, GL_FLOAT, 0, mFilled ? &vertices[0] : &vertices[3]);
+	glDrawArrays(mFilled ? GL_TRIANGLE_FAN : GL_LINE_LOOP, 0, mFilled ? n_segments + 2 : n_segments);
+}
+
+void Angle3D::draw_element() {
+	std::vector<GLfloat> edge_vertices;
+	edge_vertices.resize(mRays * 3 + 6);
+
+	float distance_to_circle = mLenght * cosf(mAngle * M_PI / 360.0f);
+
+	Circle3D circle;
+	circle.mX1 = mX1;
+	circle.mY1 = mY1;
+	circle.mZ1 = mZ1 - distance_to_circle;
+	circle.mFilled = false;
+	circle.mRadius = mLenght * sinf(mAngle * M_PI / 360.0f);
+	circle.setupVertices(edge_vertices, mRays);
+
+	glTranslatef(mX1, mY1, mZ1);
+	glRotatef(mPitch, 1.0f, 0.0f, 0.0f);
+	glRotatef(mYaw, 0.0f, 1.0f, 0.0f);
+	glTranslatef(-mX1, -mY1, -mZ1);
+
+	glBegin(GL_LINES);
+	for (std::size_t i = 3; i < mRays * 3 + 3; i += 3) {
+		glVertex3f(mX1, mY1, mZ1);
+		glVertex3f(edge_vertices[i], edge_vertices[i + 1], edge_vertices[i + 2]);
+	}
+	glEnd();
+}
+
+void StandingCone3D::draw_element() {
+	GLsizei n_segments = (int)(50 * sqrtf(mRadius));
+	std::vector<GLfloat> vertices;
+	vertices.resize(n_segments * 3 + 6);
+
+	Circle3D circle;
+	circle.mX1 = mX1;
+	circle.mY1 = mY1; 
+	circle.mZ1 = mZ1 - mHeight;
+	circle.mRadius = mRadius;
+	circle.mFilled = true;
+	circle.setupVertices(vertices, n_segments);
+
+	glTranslatef(mX1, mY1, mZ1);
+	glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+	glTranslatef(-mX1, -mY1, -mZ1);
+
+	glVertexPointer(3, GL_FLOAT, 0, &vertices[0]);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, n_segments + 2);
+	
+	vertices[0] = mX1;
+	vertices[1] = mY1;
+	vertices[2] = mZ1;
+
+	glDrawArrays(GL_TRIANGLE_FAN, 0, n_segments + 2);
+}
+
+static int luaLocalToModel(lua_State* L) {
+	Vector inV;
+	inV.x = (double)lua_tonumber(L, 1) - XPLMGetDatad(localx);
+	inV.y = (double)lua_tonumber(L, 2) - XPLMGetDatad(localy);
+	inV.z = (double)lua_tonumber(L, 3) - XPLMGetDatad(localz);
+
+	Vector outV = rotateToModel(inV);
+
+	lua_pushnumber(L, outV.x);
+	lua_pushnumber(L, outV.y);
+	lua_pushnumber(L, outV.z);
+
+	return 3;
+}
+
+static int luaModelToLocal(lua_State* L) {
+	Vector inV;
+	inV.x = (double)lua_tonumber(L, 1);
+	inV.y = (double)lua_tonumber(L, 2);
+	inV.z = (double)lua_tonumber(L, 3);
+
+	Vector outV = rotateToLocal(inV);
+
+	lua_pushnumber(L, outV.x + XPLMGetDatad(localx));
+	lua_pushnumber(L, outV.y + XPLMGetDatad(localy));
+	lua_pushnumber(L, outV.z + XPLMGetDatad(localz));
+
+	return 3;
+}
+
 void xap3d::draw3d(XPLMDrawingPhase phase)
 {
     if (phase == xplm_Phase_Airplanes) {
+
         if ((hdr_pass_dr && XPLMGetDatai(hdr_pass_dr) == 1) || ++hdr_pass == 1)
         {
-            //lastViewType = XPLMGetDatai(viewType);
-
+            //lastViewType = XPLMGetDatai(viewType)
             lastViewPitch = XPLMGetDataf(viewPitch);
             lastViewRoll = XPLMGetDataf(viewRoll);
             lastViewHeading = XPLMGetDataf(viewHeading);
@@ -545,19 +946,52 @@ void xap3d::draw3d(XPLMDrawingPhase phase)
             extractMatrixes();
 
             drawBillboards();
-        }
-    }
+        } 
+
+	} else if (phase == xplm_Phase_LastScene) {
+		lastLocalX = XPLMGetDatad(localx);
+		lastLocalY = XPLMGetDatad(localy);
+		lastLocalZ = XPLMGetDatad(localz);
+
+		glDisable(GL_CULL_FACE);
+		glPushMatrix();
+		if (XPLMGetDatai(viewIsExternal)) {
+			glTranslatef(lastLocalX, lastLocalY, lastLocalZ);
+			XPLMGetDatavf(quaternion, lastQuat, 0, 4);
+			float bank = atan2(2 * (lastQuat[0] * lastQuat[1] + lastQuat[2] * lastQuat[3]), 1 - 2 * (pow(lastQuat[1], 2) + pow(lastQuat[2], 2)));
+			float attitude = asin(2 * (lastQuat[0] * lastQuat[2] - lastQuat[3] * lastQuat[1]));
+			float heading = atan2(2 * (lastQuat[0] * lastQuat[3] + lastQuat[1] * lastQuat[2]), 1 - 2 * (pow(lastQuat[2], 2) + pow(lastQuat[3], 2)));
+			glRotatef(heading * 180.0 / M_PI, 0.0f, -1.0f, 0.0f);
+			glRotatef(attitude * 180.0 / M_PI, 1.0f, 0.0f, 0.0f);
+			glRotatef(bank * 180.0 / M_PI, 0.0f, 0.0f, -1.0f);
+		} 
+		draw3dAdditions();
+		glPopMatrix();
+		glEnable(GL_CULL_FACE);
+	} 
 }
 
 void xap3d::frameFinished()
 {
     billboardsToDraw.clear();
+	
+	for (Objects3D::iterator it = ObjectsToDraw.begin(); it != ObjectsToDraw.end(); ++it) {
+		delete *it;
+	}	
+	ObjectsToDraw.clear();
+	
     hdr_pass = 0;
 }
 
 void xap3d::exportDraw3dFunctions(lua_State *L)
 {
     LUA_REGISTER(L, "drawBillboard", luaDrawBillboard);
+	LUA_REGISTER(L, "draw3DLine", luaDraw3DLine);
+	LUA_REGISTER(L, "draw3DCircle", luaDraw3DCircle);
+	LUA_REGISTER(L, "draw3DAngle", luaDraw3DAngle);
+	LUA_REGISTER(L, "draw3DStandingCone", luaDraw3DStandingCone);
+	LUA_REGISTER(L, "LocalToModel", luaLocalToModel);
+	LUA_REGISTER(L, "ModelToLocal", luaModelToLocal);
 }
 
 

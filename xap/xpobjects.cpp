@@ -146,7 +146,7 @@ void xap::drawObjects()
 {
     if (objectsToDraw.size()) {
         for (std::vector<DrawCommand>::iterator i = objectsToDraw.begin();
-                i != objectsToDraw.end(); i++)
+                i != objectsToDraw.end(); ++i)
         {
             DrawCommand &c = *i;
             // This was suggested by Ben Supnik
@@ -160,7 +160,7 @@ void xap::drawObjects()
     
     if (objectsToDelete.size()) {
         for (std::vector<XPLMObjectRef>::iterator i = objectsToDelete.begin();
-                i != objectsToDelete.end(); i++)
+                i != objectsToDelete.end(); ++i)
             XPLMUnloadObject(*i);
         objectsToDelete.clear();
     }

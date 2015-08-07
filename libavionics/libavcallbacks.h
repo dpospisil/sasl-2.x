@@ -206,6 +206,15 @@ typedef void (*sasl_draw_textured_triangle)(struct SaslGraphicsCallbacks *canvas
         double x2, double y2, double u2, double v2, double r2, double g2, double b2, double a2,
         double x3, double y3, double u3, double v3, double r3, double g3, double b3, double a3);
 
+// enable masking, prepare to draw mask
+typedef void (*sasl_draw_mask)(struct SaslGraphicsCallbacks *canvas);
+
+// prepare drawing under mask
+typedef void (*sasl_draw_under_mask)(struct SaslGraphicsCallbacks *canvas);
+
+// disable masking
+typedef void (*sasl_draw_mask_end)(struct SaslGraphicsCallbacks *canvas);		
+		
 // enable clipping to rectangle
 typedef void (*sasl_set_clip_area)(struct SaslGraphicsCallbacks *canvas, 
         double x1, double y1, double x2, double y2);
@@ -242,8 +251,14 @@ typedef int (*sasl_find_texture)(struct SaslGraphicsCallbacks *canvas,
 // pass -1 as texture ID to restore default render target
 // return -1 on errors or zero on success
 typedef int (*sasl_set_render_target)(struct SaslGraphicsCallbacks *canvas, 
-        int textureId);
+        int textureId, bool clear);
 
+//generate framebuffers and renderbuffers for components on INIT stage
+//return -1 on errors or render-target-texture ID on success
+typedef int (*sasl_get_new_render_target_id)(struct SaslGraphicsCallbacks *canvas, 
+	int context_width, int context_height);		
+		
+	
 // create new texture of specified size and store it under the same name 
 // as old texture
 // use it for textures used as render target
@@ -251,7 +266,7 @@ typedef void (*sasl_recreate_texture)(struct SaslGraphicsCallbacks *canvas,
         int textureId, int width, int height);
 
 
-// grpahics callbacks
+// graphics callbacks
 struct SaslGraphicsCallbacks {
     sasl_draw_begin draw_begin;
     sasl_draw_end draw_end;
@@ -260,6 +275,9 @@ struct SaslGraphicsCallbacks {
     sasl_draw_line draw_line;
     sasl_draw_triangle draw_triangle;
     sasl_draw_textured_triangle draw_textured_triangle;
+	sasl_draw_mask draw_mask;
+	sasl_draw_under_mask draw_under_mask;
+	sasl_draw_mask_end draw_mask_end;
     sasl_set_clip_area set_clip_area;
     sasl_reset_clip_area reset_clip_area;
     sasl_push_transform push_transform;
@@ -269,6 +287,7 @@ struct SaslGraphicsCallbacks {
     sasl_rotate_transform rotate_transform;
     sasl_find_texture find_texture;
     sasl_set_render_target set_render_target;
+	sasl_get_new_render_target_id get_new_render_target_id;
     sasl_recreate_texture recreate_texture;
 };
 

@@ -75,8 +75,7 @@ void ClientProp::send(NetBuf &buffer)
                 int len = s.length();
                 if ((! lastValue.buf) || (len + 1 > lastValue.maxBufSize)) {
                     lastValue.maxBufSize = len + 20;
-                    if (lastValue.buf)
-                        free(lastValue.buf);
+                    free(lastValue.buf);
                     lastValue.buf = (char*)malloc(lastValue.maxBufSize);
                 }
                 strcpy(lastValue.buf, s.c_str());
@@ -148,8 +147,9 @@ int PropsServer::update()
         if ((*i).update()) {
             log.debug("closing client connection");
             i = clients.erase(i);
-        } else
-            i++;
+		} else {
+			++i;
+		}
     }
 
     return err;
@@ -325,22 +325,22 @@ void PropsClient::handleGetProps(NetBuf &buffer)
     std::list<ClientProp*> propsToSend;
 
     for (std::map<int, ClientProp>::iterator i = propRefs.begin();
-            i != propRefs.end(); i++)
+            i != propRefs.end(); ++i)
     {
         ClientProp &p = (*i).second;
         if (p.isChanged()) 
             propsToSend.push_back(&p);
     }
-    
-    con.getSendBuffer().addUint8(4);
-    con.getSendBuffer().addUint8(propsToSend.size());
-    con.getSendBuffer().addUint16(lastSetSerial);
+	NetBuf& sendBuffer = con.getSendBuffer();
+	sendBuffer.addUint8(4);
+	sendBuffer.addUint8(propsToSend.size());
+	sendBuffer.addUint16(lastSetSerial);
 
     for (std::list<ClientProp*>::iterator i = propsToSend.begin(); 
-            i != propsToSend.end(); i++)
+            i != propsToSend.end(); ++i)
     {
         ClientProp *p = *i;
-        p->send(con.getSendBuffer());
+		p->send(sendBuffer);
     }
 }
 
@@ -375,7 +375,7 @@ void PropsClient::handleSetProp(NetBuf &buffer)
 
     std::map<int, ClientProp>::iterator i = propRefs.find(command[1]);
     if (i == propRefs.end()) {
-        log.warning("preoperty %i doesn't exists", command[1]);
+        log.warning("property %i doesn't exists", command[1]);
         buffer.remove(sz);
         stop();
         return;

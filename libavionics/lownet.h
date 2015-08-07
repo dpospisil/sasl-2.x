@@ -31,7 +31,10 @@ class NetBuf
         
         /// Copy buffer
         NetBuf(const NetBuf &netBuf);
-
+		
+		/// Copy assignment buffer
+		NetBuf& operator=(const NetBuf& netBuf);
+		
         /// clean-up
         ~NetBuf();
 

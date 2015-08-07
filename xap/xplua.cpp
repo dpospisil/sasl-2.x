@@ -508,6 +508,13 @@ static int luaGetAircraftPath(lua_State *L)
     return 1;
 }
 
+// returns path to ACF with ACF name
+static int luaGetAircraft(lua_State *L)
+{
+	std::string path = getAircraftFullPath();
+	lua_pushstring(L, path.c_str());
+	return 1;
+}
 
 // remove probe object if exists
 void xap::doneLuaFunctions()
@@ -536,7 +543,9 @@ void xap::exportLuaFunctions(lua_State *L)
     LUA_REGISTER(L, "reloadScenery", reloadScenery);
     LUA_REGISTER(L, "worldToLocal", worldToLocal);
     LUA_REGISTER(L, "localToWorld", localToWorld);
+	
     LUA_REGISTER(L, "getAircraftPath", luaGetAircraftPath);
+	LUA_REGISTER(L, "getAircraft", luaGetAircraft);
  
     // navaid api
 

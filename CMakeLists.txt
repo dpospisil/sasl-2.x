@@ -21,6 +21,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	set(SASL_INCL_DIRS "${SASL_INCL_DIRS}" "/usr/include/SOIL")
 	set(SASL_LINK_LIBS luajit /usr/lib/libSOIL.a)
 
+
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 #
 #   MacOS
@@ -37,6 +38,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	set(SASL_LINK_LIBS "${SASL_LINK_LIBS} -framework OpenGL -framework OpenAL -framework CoreFoundation -framework IOKit")
 	set(SASL_LINK_LIBS "${SASL_LINK_LIBS} -arch x86_64 -mmacosx-version-min=10.7")
 
+
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 #
 #   Windows
@@ -49,6 +51,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	set(SASL_LINK_FLAGS "/nologo /LTCG")
 	set(SASL_LINK_DIRS "${SASL_SDK_DIR}/Libraries/Win;${SASL_OPENAL}/libs/Win64")
 	set(SASL_LINK_LIBS lua51 SOIL opengl32 OpenAL32 XPLM_64 XPWidgets_64 ws2_32)
+
 
 endif()
 

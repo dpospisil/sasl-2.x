@@ -55,6 +55,20 @@ static void drawTexturedTriangle(struct SaslGraphicsCallbacks *canvas,
 {
 }
 
+// enable masking, prepare to draw it
+static void drawMask(struct SaslGraphicsCallbacks *canvas) {
+
+}
+
+// prepare to draw under mask
+static void drawUnderMask(struct SaslGraphicsCallbacks *canvas) {
+
+}
+
+// disable masking
+static void drawMaskEnd(struct SaslGraphicsCallbacks *canvas) {
+
+}
 
 // enable clipping to rectangle
 static void setClipArea(struct SaslGraphicsCallbacks *canvas, 
@@ -111,11 +125,17 @@ static int findTexture(struct SaslGraphicsCallbacks *canvas,
 // start rendering to texture
 // pass -1 as texture ID to restore default render target
 static int setRenderTarget(struct SaslGraphicsCallbacks *canvas, 
-        int textureId)
+        int textureId, bool clear)
 {
     return -1;
 }
 
+//generate framebuffers and renderbuffers for components on INIT stage
+//return -1 on errors or render-target-texture ID on success
+static int getNewRenderTargetID(struct SaslGraphicsCallbacks *canvas,
+	int context_width, int context_height) {
+	return -1;
+}
 
 // create new texture of specified size and store it under the same name 
 // as old texture
@@ -128,9 +148,10 @@ static void recreateTexture(struct SaslGraphicsCallbacks *canvas,
 
 static struct SaslGraphicsCallbacks callbacks = { drawBegin, drawEnd,
     loadTexture, freeTexture, drawLine, drawTriangle, drawTexturedTriangle,
+	drawMask, drawUnderMask, drawMaskEnd,
     setClipArea, resetClipArea, pushTransform, popTransform, 
     translateTransform, scaleTransform, rotateTransform, findTexture,
-    setRenderTarget, recreateTexture };
+    setRenderTarget, getNewRenderTargetID, recreateTexture };
 
 
 SaslGraphicsCallbacks* xa::getGraphicsStub()

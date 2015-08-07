@@ -1,6 +1,7 @@
 #include "luna.h"
 
 #include <vector>
+#include <algorithm>
 #include <string.h>
 #include <sys/types.h>
 #ifndef WINDOWS
@@ -10,9 +11,12 @@
 #endif
 #include <cstdlib>
 
+#include "interpolator.h"
 
 using namespace xa;
 
+/// Stores interpolators object, which is part of the lua-cpp interpolation interface
+static std::vector<Interpolator<double>*> Interpolators;
 
 /// bitwise and
 static int luaBitAnd(lua_State *L) 
@@ -130,13 +134,13 @@ static int luaListFiles(lua_State *L)
 
 
 
-static std::vector<double> loadLuaTable(lua_State *L)
+static std::vector<double> loadLuaTable(lua_State *L, const std::size_t& stack_shift = 0)
 {
     std::vector<double> values;
 
     /* table is in the stack at index -1 */
     lua_pushnil(L);  /* first key, table at -2 */
-    while (lua_next(L, -2) != 0) {
+	while (lua_next(L, -2 - stack_shift) != 0) {
         /* uses 'key' (at index -2) and 'value' (at index -1) */
         int index = lua_tonumber(L, -2);
         double value = lua_tonumber(L, -1);
@@ -153,74 +157,157 @@ static std::vector<double> loadLuaTable(lua_State *L)
     return values;
 }
 
+static bool configureInterpolator(Interpolator<double>* inInterpolator, const std::vector<double>& inValues,
+	const std::vector<std::size_t>& inDelimiters, const std::vector<std::vector<double> >& inFunction) {
 
-static double tarate(double *r1, double *r2, int size, double x)
-{
-    int last = size - 1;
+	inInterpolator->setGrid(inValues);
+	inInterpolator->setGridDelimiters(inDelimiters);
 
-    if (x >= r1[last]) 
-      return r2[last];
-    else if (x <= r1[0])
-      return r2[0];
-   
-    int k = 0;
-    while ((x >= r1[k]) && (k < size))
-        k++;
+	for (std::size_t i = 0; i < inFunction.size(); i++) {
+		inInterpolator->addFunction(inFunction[i]);
+	}
 
-    double a = (r2[k-1] - r2[k]) / (r1[k-1] - r1[k]);
-    double b = r2[k] - a*r1[k];              
-   
-    return a * x + b;
+	if (inInterpolator->validate()) {
+		inInterpolator->calculateGradients();
+		Interpolators.push_back(inInterpolator);
+		return true;
+	} else {
+		return false;
+	}
 }
 
-
-static int loadTable(lua_State *L)
+static int luaCreateInterpolator(lua_State *L)
 {
-    lua_pushnumber(L, 1); lua_gettable(L, 1);  // push first table
-    std::vector<double> v1 = loadLuaTable(L);
-    lua_pop(L, 1); // pop table
-    
-    lua_pushnumber(L, 2); lua_gettable(L, 1);  // push second table
-    std::vector<double> v2 = loadLuaTable(L);
-    lua_pop(L, 1); // pop table
+	std::size_t dimensions = lua_objlen(L, 1);
+	std::vector<double> gridValues;
+	std::vector<std::size_t> gridDelimiters;
+	for (std::size_t i = 1; i <= dimensions; i++) {
+		lua_pushnumber(L, i); lua_gettable(L, 1);
+		std::vector<double> gridPart = loadLuaTable(L);
+		lua_pop(L, 1); 
 
-    if ((v1.size() != v2.size()) || (! v1.size())) {
-        lua_pushnil(L);
-        return 0;
-    }
+		if (!gridPart.size()) {
+			lua_pushnil(L);
+			return 0;
+		}
 
-    int size = v1.size();
-    int vsize = size * sizeof(double);
-    char *buf = (char*)lua_newuserdata(L, vsize * 2 + sizeof(int));
-    memcpy(buf, &size, sizeof(int));
+		gridValues.insert(gridValues.end(), gridPart.begin(), gridPart.end());
 
-    double *v = &v1[0];
-    memcpy(buf + sizeof(int), v, vsize);
-    v = &v2[0];
-    memcpy(buf + sizeof(int) + vsize, v, vsize);
+		gridDelimiters.push_back(gridPart.size());
+	}
 
-    return 1;
+	std::size_t functions = lua_objlen(L, 2);
+	std::vector<std::vector<double> > function;
+	for (std::size_t i = 1; i <= functions; i++) {
+		lua_pushnumber(L, i);
+		lua_gettable(L, 2);
+		std::vector<double> v = loadLuaTable(L);
+		function.push_back(v);
+		lua_pop(L, 1);
+	}
+
+	bool successConf = true;
+	switch (gridDelimiters.size()) {
+	case 1: {
+		Interpolator1D<double>* interpolator1d = new Interpolator1D<double>;
+		if (!configureInterpolator(interpolator1d, gridValues, gridDelimiters, function)) {
+			successConf = false;
+		} else {
+			lua_pushnumber(L, interpolator1d->getID());
+			return 1;
+		}
+	}
+	break;
+	case 2: {
+		Interpolator2D<double>* interpolator2d = new Interpolator2D<double>;
+		if (!configureInterpolator(interpolator2d, gridValues, gridDelimiters, function)) {
+			successConf = false;
+		} else {
+			lua_pushnumber(L, interpolator2d->getID());
+			return 1;
+		}
+	}
+	break;
+	case 3: {
+		Interpolator3D<double>* interpolator3d = new Interpolator3D<double>;
+		if (!configureInterpolator(interpolator3d, gridValues, gridDelimiters, function)) {
+			successConf = false;
+		} else {
+			lua_pushnumber(L, interpolator3d->getID());
+			return 1;
+		}
+	}
+	break;
+	case 4: {
+		Interpolator4D<double>* interpolator4d = new Interpolator4D<double>;
+		if (!configureInterpolator(interpolator4d, gridValues, gridDelimiters, function)) {
+			successConf = false;
+		} else {
+			lua_pushnumber(L, interpolator4d->getID());
+			return 1;
+		}
+	}
+	break;
+	case 5: {
+		Interpolator5D<double>* interpolator5d = new Interpolator5D<double>;
+		if (!configureInterpolator(interpolator5d, gridValues, gridDelimiters, function)) {
+			successConf = false;
+		} else {
+			lua_pushnumber(L, interpolator5d->getID());
+			return 1;
+		}
+	}
+	break;
+	default:
+		lua_pushnil(L);
+		return 0;
+	}
+
+	if (!successConf) {
+		lua_pushnil(L);
+		return 0;
+	}
 }
 
-static int luaTarate(lua_State *L)
+static int luaInterpolate(lua_State *L)
 {
-    if ((! lua_isuserdata(L, 1)) || (! lua_isnumber(L, 2))) {
+    if ((! lua_isnumber(L, 1)) || (! lua_istable(L, 2))) {
         lua_pushnil(L);
         return 1;
     }
 
-    char* v = (char*)lua_touserdata(L, 1);
-    int size = *((int*)v);
-    double *v1 = (double*)(v + sizeof(int));
-    double *v2 = (double*)(v + sizeof(int) + size * sizeof(double));
+	bool closedRange = false;
+	std::size_t stack_shift = 1;
+	int interpolatorID = lua_tonumber(L, 1);
+	if (lua_gettop(L) == 3) {
+		closedRange = (bool)lua_tonumber(L, 3);
+		stack_shift = 2;
+	} 
 
-    lua_pushnumber(L, tarate(v1, v2, size, lua_tonumber(L, 2)));
+	lua_pushnumber(L, 1);
+	lua_gettable(L, 2);
+	std::vector<double> point = loadLuaTable(L, stack_shift);
+	lua_pop(L, 1);
+
+	std::vector<double> i_point;
+	for (std::vector<Interpolator<double>*>::iterator it = Interpolators.begin(); it != Interpolators.end(); ++it) {
+		if ((*it)->getID() == interpolatorID) {
+			i_point = (*it)->interpolate(point, closedRange);
+
+			lua_newtable(L);
+			for (std::size_t i = 0; i < i_point.size(); i++) {
+				lua_pushnumber(L, i + 1); 
+				lua_pushnumber(L, i_point[i]); 
+				lua_settable(L, -3);
+			}
+
+			return 1;
+		}
+	}
+
+    lua_pushnil(L);
     return 1;
 }
-
-
-
-
 
 Luna::Luna(sasl_lua_creator_callback luaCreator,
                 sasl_lua_destroyer_callback luaDestroyer)
@@ -239,8 +326,8 @@ Luna::Luna(sasl_lua_creator_callback luaCreator,
         LUA_REGISTER(lua, "bitor", luaBitOr);
         LUA_REGISTER(lua, "bitxor", luaBitXor);
         LUA_REGISTER(lua, "listFiles", luaListFiles);
-        LUA_REGISTER(lua, "newRamzInterpolator", loadTable);
-        LUA_REGISTER(lua, "ramzTarate", luaTarate);
+        LUA_REGISTER(lua, "newCPPInterpolator", luaCreateInterpolator);
+        LUA_REGISTER(lua, "interpolateCPP", luaInterpolate);
 
         lua_newtable(lua);
         lua_setfield(lua, LUA_REGISTRYINDEX, "xavionics");
@@ -251,7 +338,12 @@ Luna::Luna(sasl_lua_creator_callback luaCreator,
 
 Luna::~Luna()
 {
-    if (luaDestroyer)
+    for (std::vector<Interpolator<double>*>::iterator it = Interpolators.begin(); it != Interpolators.end(); ++it) {
+		delete (*it);
+	}
+	Interpolators.clear();
+	
+	if (luaDestroyer)
         luaDestroyer(lua);
     else
         lua_close(lua);

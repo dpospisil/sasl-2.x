@@ -180,7 +180,7 @@ static ALuint load_wave(SASL sasl, const char *file_name)
         return 0;
     }
     fseek(fi, 0, SEEK_END);
-    int32_t file_size = ftell(fi);
+    std::size_t file_size = ftell(fi);
     fseek(fi, 0, SEEK_SET);
     char *mem = (char*)malloc(file_size);
     if (! mem) {
@@ -188,7 +188,7 @@ static ALuint load_wave(SASL sasl, const char *file_name)
         fclose(fi);
         return 0;
     }
-    if ((int)fread(mem, 1, file_size, fi) != file_size) {
+    if (fread(mem, 1, file_size, fi) != file_size) {
         sasl_log_error(sasl, "WAVE file load failed - could not read file.");	
         free(mem);
         fclose(fi);
@@ -280,7 +280,7 @@ static ALuint load_wave(SASL sasl, const char *file_name)
 
 
 
-// load sound from disk or reuses already loaded sound
+// load sound from disk or reuses already loaded 
 static int loadSound(struct SaslSoundCallbacks *callbacks, const char *fileName)
 {
     SaslAlSound *sound = (SaslAlSound*)callbacks;
@@ -353,12 +353,13 @@ static int loadSound(struct SaslSoundCallbacks *callbacks, const char *fileName)
 static void deleteBuffer(SaslAlSound *sound, ALuint id)
 {
     for (std::map<std::string, Buffer>::iterator i = sound->buffers.begin(); 
-            i != sound->buffers.end(); i++)
+            i != sound->buffers.end(); ++i)
     {
-        Buffer &buffer = (*i).second;
-        alDeleteBuffers(1, &buffer.id);
-        sound->buffers.erase(i);
-        return;
+		if ((*i).second.id == id) {
+			alDeleteBuffers(1, &(*i).second.id);
+			sound->buffers.erase(i);
+			return;
+		}
     }
 }
 
@@ -734,7 +735,7 @@ static void setListenerEnv(struct SaslSoundCallbacks *s, int scene)
     sound->scene = scene;
 
     for (std::map<int, Source>::iterator i = sound->sources.begin(); 
-            i != sound->sources.end(); i++)
+            i != sound->sources.end(); ++i)
     {
         Source &source = (*i).second;
         if (scene & source.scene)
@@ -860,7 +861,7 @@ void sasl_done_al_sound(SaslAlSound *sound)
         ContextChanger(sound->context);
         
         for (std::map<int, Source>::iterator i = sound->sources.begin(); 
-                i != sound->sources.end(); i++)
+                i != sound->sources.end(); ++i)
         {
             ALuint source = (*i).second.id;
             alDeleteSources(1, &source);
@@ -868,7 +869,7 @@ void sasl_done_al_sound(SaslAlSound *sound)
         sound->sources.clear();
         
         for (std::map<std::string, Buffer>::iterator i = sound->buffers.begin(); 
-                i != sound->buffers.end(); i++)
+                i != sound->buffers.end(); ++i)
         {
             ALuint buffer = (*i).second.id;
             alDeleteBuffers(1, &buffer);

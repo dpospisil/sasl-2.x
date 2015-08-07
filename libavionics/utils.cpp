@@ -54,14 +54,15 @@ double xa::strToDouble(const std::string &str, double dflt)
 
 std::string xa::getDirectory(const std::string &fileName)
 {
-    int idx = fileName.find_last_of('/');
-    if (0 > idx)
-        idx = fileName.find_last_of('\\');
-    std::string panelDir;
-    if (0 < idx)
-        return fileName.substr(0, idx);
-    else
-        return ".";
+    std::string::size_type idx = fileName.find_last_of('/');
+	if (idx == std::string::npos) {
+		idx = fileName.find_last_of('\\');
+	}
+	if (idx != std::string::npos) {
+		return fileName.substr(0, idx);
+	} else {
+		return ".";
+	}
 }
 
 

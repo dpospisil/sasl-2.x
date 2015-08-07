@@ -45,10 +45,17 @@ NetBuf::NetBuf(const NetBuf &nb)
     memcpy(data, nb.data, nb.filled);
 }
 
+NetBuf& NetBuf::operator=(const NetBuf& nb) {
+	allocated = nb.allocated;
+	filled = nb.filled;
+	data = (unsigned char*)malloc(allocated);
+	memcpy(data, nb.data, nb.filled);
+	return *this;
+}
+
 NetBuf::~NetBuf() 
 {
-    if (data)
-        free(data);
+    free(data);
     data = NULL;
 }
 
@@ -58,7 +65,12 @@ void NetBuf::ensureHasSpace(size_t size)
     if (size + filled <= allocated)
         return;
     size_t newSize = ((filled + size) / 1024 + 1) * 1024;
-    data = (unsigned char*)realloc(data, newSize);
+	unsigned char* dataR = (unsigned char*)realloc(data, newSize);
+	if (dataR) {
+		data = dataR;
+	} else {
+		return;
+	}
     allocated = newSize;
 }
 
