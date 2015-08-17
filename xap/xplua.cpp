@@ -9,6 +9,7 @@ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+#include <lj_state.h>
 }
 #include "../libavionics/luachk.h"
 
@@ -634,7 +635,8 @@ lua_State* xap::luaCreatorCallback()
     	XPLMSendMessageToPlugin(XPLM_PLUGIN_XPLANE, ALLOC_OPEN,&r);
     	ud = r.ud;
     	printf("Got allocator: %p\n", ud);
-    	lua = lua_newstate(lj_alloc_f, ud);
+    	//lua = lua_newstate(lj_alloc_f, ud);
+        lua = lj_state_newstate(lj_alloc_f, ud);
     	printf("Got Lua: %p\n", lua);
     	xplane_wants_allocator = true;
     } 
