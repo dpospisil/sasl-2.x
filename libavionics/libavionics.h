@@ -270,6 +270,11 @@ void sasl_set_sound_engine(SASL sasl, struct SaslSoundCallbacks *callbacks);
 /// \param fileName path to sample on disk
 int sasl_sample_load(SASL sasl, const char *fileName);
 
+/// Load sample into memory.  Returns sample handler or 0 if can't load sample
+/// \param sasl SASL handler.
+/// \param fileName path to sample on disk
+int sasl_sample_load_reversed(SASL sasl, const char *fileName);
+
 /// Unload sample
 /// \param sasl SASL handler.
 /// \param sampleId sample handler
@@ -410,7 +415,9 @@ void sasl_listener_set_orientation(SASL sasl, float x, float y, float z,
 void sasl_listener_get_orientation(SASL sasl, float *x, float *y, float *z, 
         float *ux, float *uy, float *uz);
 
-
+/// Get SASL sound contexts state
+/// \param sasl SASL handler.
+void sasl_get_contexts_state(SASL sasl, int* sources, int* source_context_limit);
 
 // Logger API
 

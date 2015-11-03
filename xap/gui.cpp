@@ -170,9 +170,7 @@ void xap::initGui()
 {
     XPLMMenuID pluginsMenu = XPLMFindPluginsMenu();
 
-    if (-1 == xapMenuItem)
-        xapMenuItem = XPLMAppendMenuItem(pluginsMenu, "SASL", 
-                NULL, 1);
+    xapMenuItem = XPLMAppendMenuItem(pluginsMenu, "SASL", NULL, 1);
     xapMenu = XPLMCreateMenu("SASL", pluginsMenu, xapMenuItem,
             xapMenuCallback, NULL);
     startMenuItem = XPLMAppendMenuItem(xapMenu, "Start server", START_MENU, 1);

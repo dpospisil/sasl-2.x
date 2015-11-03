@@ -27,6 +27,13 @@ int Sound::loadSample(const char *fileName)
         return 0;
 }
 
+int Sound::loadSampleReversed(const char *fileName)
+{
+	if (sound && sound->load_reversed)
+		return sound->load_reversed(sound, fileName);
+	else
+		return 0;
+}
 
 void Sound::unloadSample(int sampleId)
 {
@@ -226,6 +233,12 @@ void Sound::update()
         sound->update(sound);
 }
 
+void Sound::getContextsState(int& sources, int& context_source_limit)
+{
+	if (sound && sound->get_contexts_state) {
+		sound->get_contexts_state(sound, &sources, &context_source_limit);
+	}
+}
 
 static int luaLoadSample(lua_State *L)
 {
@@ -234,6 +247,12 @@ static int luaLoadSample(lua_State *L)
     return 1;
 }
 
+static int luaLoadSampleInReverse(lua_State *L)
+{
+	int sampleId = getAvionics(L)->getSound().loadSampleReversed(lua_tostring(L, 1));
+	lua_pushnumber(L, sampleId);
+	return 1;
+}
 
 static int luaUnloadSample(lua_State *L)
 {
@@ -460,6 +479,27 @@ static int luaGetListenerOrientation(lua_State *L)
     return 6;
 }
 
+static int luaGetContextsState(lua_State *L) 
+{
+	int sources, source_context_limit;
+	getAvionics(L)->getSound().getContextsState(sources, source_context_limit);
+	lua_newtable(L);
+
+	int filled_contexts = sources / source_context_limit;
+	int in_last_context = sources % source_context_limit;
+
+	for (int i = 0; i < filled_contexts; i++) {
+		lua_pushnumber(L, i + 1);
+		lua_pushnumber(L, source_context_limit);
+		lua_settable(L, -3);
+	}
+
+	lua_pushnumber(L, filled_contexts + 1);
+	lua_pushnumber(L, in_last_context);
+	lua_settable(L, -3);
+
+	return 1;
+}
 
 
 void Sound::exportSoundToLua(Luna &lua)
@@ -467,6 +507,7 @@ void Sound::exportSoundToLua(Luna &lua)
     lua_State *L = lua.getLua();
 
     LUA_REGISTER(L, "loadSampleFromFile", luaLoadSample);
+	LUA_REGISTER(L, "loadSampleInReverse", luaLoadSampleInReverse);
     LUA_REGISTER(L, "unloadSample", luaUnloadSample);
     LUA_REGISTER(L, "playSample", luaSamplePlay);
     LUA_REGISTER(L, "stopSample", luaSampleStop);
@@ -493,5 +534,6 @@ void Sound::exportSoundToLua(Luna &lua)
     LUA_REGISTER(L, "getListenerPosition", luaGetListenerPosition);
     LUA_REGISTER(L, "setListenerOrientation", luaSetListenerOrientation);
     LUA_REGISTER(L, "getListenerOrientation", luaGetListenerOrientation);
+	LUA_REGISTER(L, "getSoundContextsState", luaGetContextsState);
 }
 

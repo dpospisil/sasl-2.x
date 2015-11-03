@@ -350,6 +350,13 @@ int sasl_sample_load(SASL sasl, const char *fileName)
     return 0;
 }
 
+int sasl_sample_load_reversed(SASL sasl, const char *fileName)
+{
+	TRY
+		return sasl->avionics->getSound().loadSampleReversed(fileName);
+	CATCH("loading sound reversed")
+	return 0;
+}
 
 void sasl_sample_unload(SASL sasl, int sampleId)
 {
@@ -569,7 +576,12 @@ void sasl_listener_get_orientation(SASL sasl, float *x, float *y, float *z,
     CATCH("getting listener orientation")
 }
 
-
+void sasl_get_contexts_state(SASL sasl, int* sources, int* source_context_limit)
+{
+	TRY
+		sasl->avionics->getSound().getContextsState(*sources, *source_context_limit);
+	CATCH("getting sound contexts states")
+}
 
 void sasl_set_log_callback(SASL sasl, sasl_log_callback callback, void *ref)
 {

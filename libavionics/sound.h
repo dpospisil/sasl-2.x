@@ -28,6 +28,10 @@ class Sound
         /// \param fileName path to sample on disk
         int loadSample(const char *fileName);
         
+		/// Load sample into memory reversed.  Returns sample handler or 0 if can't load sample
+		/// \param fileName path to sample on disk
+		int loadSampleReversed(const char *fileName);
+		
         /// Unload sample to free memory
         /// \param sampleId sample handler
         void unloadSample(int sampleId);
@@ -180,6 +184,11 @@ class Sound
         /// Allow sound engine do its job
         /// Call it on every frame
         void update();
+		
+		/// Get current state of SASL sound contexts
+		 /// \param sources current sources loaded
+        /// \param source_context_limit max sources count attached to the one context
+		void getContextsState(int& sources, int& source_context_limit);
 
         /// Register functions in Lua
         void exportSoundToLua(Luna &lua);
