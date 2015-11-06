@@ -190,6 +190,8 @@ void xap::enableMenus(bool serverRunning)
 
 void xap::doneGui()
 {
+	XPLMMenuID pluginsMenu = XPLMFindPluginsMenu();
+	XPLMRemoveMenuItem(pluginsMenu, xapMenuItem);
     XPLMDestroyMenu(xapMenu);
     destroyOptionsDialog();
 }
