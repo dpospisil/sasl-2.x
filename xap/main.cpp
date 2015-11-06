@@ -42,6 +42,9 @@ extern "C" {
 // version of plug-in
 #include "../version.h"
 
+static bool graphicsRegistered = false;
+#define MSG_PLMANAGER_REGISTER_GRAPHICS 1099
+
 using namespace xap;
 using namespace xap3d;
 
@@ -182,15 +185,15 @@ static void printToLog(int level, const char *message)
     char levelStr[10];
 
     switch (level) {
-        case LOG_DEBUG: sprintf(levelStr, "DEBUG"); break;
-        case LOG_INFO: sprintf(levelStr, "INFO"); break;
-        case LOG_WARNING: sprintf(levelStr, "WARNING"); break;
-        default: sprintf(levelStr, "ERROR");
+        case LOG_DEBUG: sprintf(levelStr, "DEBUG]"); break;
+        case LOG_INFO: sprintf(levelStr, "INFO]"); break;
+        case LOG_WARNING: sprintf(levelStr, "WARNING]"); break;
+        default: sprintf(levelStr, "ERROR]");
     }
 
     std::size_t msgLen = 20 + strlen(levelStr) + strlen(message);
     char *buf = (char*)alloca(msgLen);
-    sprintf(buf, "SASL %s: %s\n", levelStr, message);
+    sprintf(buf, "[SASL %s %s\n", levelStr, message);
     XPLMDebugString(buf);
     printf("%s", buf);
 }
@@ -301,7 +304,7 @@ static double getPropd(const char *name)
 {
     XPLMDataRef ref = XPLMFindDataRef(name);
     if (! ref) {
-        XPLMDebugString("SASL: Can't find property ");
+        XPLMDebugString("[SASL] Can't find property ");
         XPLMDebugString(name);
         XPLMDebugString("\n");
         return 0.0;
@@ -589,20 +592,25 @@ static XPLMCursorStatus handleCursor(XPLMWindowID inWindowID, int x, int y,
         return xplm_CursorArrow;
 }
 
+/// To follow by window resizing
+static int previousFakeWindowWidth = 0;
+static int previousFakeWindowHeight = 0;
+
 /// Creates screen-wide invisible window with mouse press handler
 static XPLMWindowID createFakeWindow()
 {
-    int screenWidth, screenHeight;
+    int scrWidth, scrHeight;
 
-    XPLMGetScreenSize(&screenWidth, &screenHeight);
+	previousFakeWindowWidth = scrWidth = XPLMGetDatai(screenWidth);
+	previousFakeWindowHeight = scrHeight = XPLMGetDatai(screenHeight);
 
     XPLMCreateWindow_t win;
     memset(&win, 0, sizeof(win));
 
     win.structSize = sizeof(win);
     win.left = 0;
-    win.top = screenHeight;
-    win.right = screenWidth;
+	win.top = scrHeight;
+	win.right = scrWidth;
     win.bottom = 0;
     win.visible = 1;
     win.drawWindowFunc = notDrawWindow;
@@ -678,21 +686,21 @@ void xap::reloadPanel(bool keepProps)
     std::string dir = getAircraftDir();
     std::string panelPath = getPanelPath(dir);
 
-    XPLMDebugString("SASL: Path to panel: ");
+    XPLMDebugString("[SASL] Path to panel: ");
     XPLMDebugString(panelPath.c_str());
     XPLMDebugString("\n");
     
-    XPLMDebugString("SASL: Loading avionics...\n");
+    XPLMDebugString("[SASL] Loading avionics...\n");
     panelViewInitialized = false;
 
     std::string dataDir = dir + "/plugins/sasl/data";
     if (! fileDoesExist(dataDir + "/scripts/init.lua"))
-        XPLMDebugString("SASL: can't find init script");
+        XPLMDebugString("[SASL] Can't find init script");
 
 
     sasl = sasl_init(dataDir.c_str(), luaCreatorCallback, luaDestroyerCallback);
     if (! sasl) {
-        XPLMDebugString("SASL: error initializing from ");
+        XPLMDebugString("[SASL] Error initializing from ");
         XPLMDebugString(dataDir.c_str());
         XPLMDebugString("\n");
         return;
@@ -737,7 +745,7 @@ void xap::reloadPanel(bool keepProps)
         }
     } else {
         freeAvionics(keepProps);
-        XPLMDebugString("SASL: Avionics not detected\n");
+        XPLMDebugString("[SASL] Avionics not detected\n");
     }
 }
 
@@ -793,7 +801,15 @@ static float updateAvionics(float elapsedSinceLastCall,
 {
     if (! fakeWindow)
 	 fakeWindow = createFakeWindow();
+	
+	if (previousFakeWindowWidth != XPLMGetDatai(screenWidth) ||
+		previousFakeWindowHeight != XPLMGetDatai(screenHeight)) {
 
+		XPLMDestroyWindow(fakeWindow);
+		fakeWindow = createFakeWindow();
+
+	}
+	
     if (sasl && (! disabled)) {
         int clickable = XPLMGetDatai(showClickable);
         if (clickable != lastShowClickable) {
@@ -835,7 +851,7 @@ static void callCallback(const char *name)
 // start plugin
 PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc)
 {
-    XPLMDebugString("SASL: Starting...\n");
+    XPLMDebugString("[SASL] Starting...\n");
     const char *pluginSignature = "1-sim.sasl";
     
     // Mac-specific: it IS possible to have SASL installed twice, once in the ACF folder
@@ -849,9 +865,9 @@ PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc)
         // Figure out where the other plugin came from
         char pathToAnotherCopy[256];
         XPLMGetPluginInfo(other_sasl_id, NULL, pathToAnotherCopy, NULL, NULL);
-        XPLMDebugString("SASL: Another copy already loaded from ");
+        XPLMDebugString("[SASL] Another copy already loaded from ");
         XPLMDebugString(pathToAnotherCopy);
-        XPLMDebugString("\nSASL: Will not init twice, bailing\n");
+        XPLMDebugString("\n[SASL] Will not init twice, bailing\n");
         return 0;
     }
 
@@ -921,100 +937,105 @@ PLUGIN_API void	XPluginStop(void)
 }
 
 
-// disable plugin
-PLUGIN_API void XPluginDisable(void)
-{
-    XPLMUnregisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
-    XPLMUnregisterFlightLoopCallback(updateAvionics, NULL);
-    XPLMUnregisterKeySniffer(handleKeyboardEvent, 0, NULL);
-    disabled = true;
-    XPLMDestroyWindow(fakeWindow);
-    freeAvionics(false);
+void registerGraphics() {
+	if (!XPLMRegisterDrawCallback(drawGauges, xplm_Phase_Gauges, 0, NULL))
+		XPLMDebugString("[SASL ERROR] Error registering draw callback at xplm_Phase_Gauges\n");
+	if (!XPLMRegisterDrawCallback(drawPopups, xplm_Phase_Window, 0, NULL))
+		XPLMDebugString("[SASL ERROR] Error registering draw callback at xplm_Phase_Window\n");
+	if (!XPLMRegisterDrawCallback(drawScene, xplm_Phase_Objects, 0, NULL))
+		XPLMDebugString("[SASL ERROR] Error registering draw callback at xplm_Phase_Objects\n");
+	if (!XPLMRegisterDrawCallback(drawLast2d, xplm_Phase_Window, 0, NULL))
+		XPLMDebugString("[SASL ERROR] Error registering draw callback at xplm_Phase_Window (last 2d)\n");
+	if (!XPLMRegisterDrawCallback(drawAirplanes, xplm_Phase_Airplanes, 0, NULL))
+		XPLMDebugString("[SASL ERROR] Error registering draw callback at xplm_Phase_Airplanes\n");
+	if (!XPLMRegisterDrawCallback(drawLastScene, xplm_Phase_LastScene, 0, NULL))
+		XPLMDebugString("[SASL ERROR] Error registering draw callback at xplm_Phase_LastScene with experimental features\n");
 
+	graphicsRegistered = true;
+}
+
+void unregisterGraphics() {
 	XPLMUnregisterDrawCallback(drawGauges, xplm_Phase_Gauges, 0, NULL);
 	XPLMUnregisterDrawCallback(drawPopups, xplm_Phase_Window, 0, NULL);
 	XPLMUnregisterDrawCallback(drawScene, xplm_Phase_Objects, 0, NULL);
 	XPLMUnregisterDrawCallback(drawLast2d, xplm_Phase_Window, 0, NULL);
 	XPLMUnregisterDrawCallback(drawAirplanes, xplm_Phase_Airplanes, 0, NULL);
 	XPLMUnregisterDrawCallback(drawLastScene, xplm_Phase_LastScene, 0, NULL);
+
+	graphicsRegistered = false;
 }
 
+
+// disable plugin
+PLUGIN_API void XPluginDisable(void)
+{
+	XPLMUnregisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
+	XPLMUnregisterFlightLoopCallback(updateAvionics, NULL);
+	XPLMUnregisterKeySniffer(handleKeyboardEvent, 0, NULL);
+	disabled = true;
+	XPLMDestroyWindow(fakeWindow);
+	freeAvionics(false);
+
+	if (graphicsRegistered) {
+		unregisterGraphics();
+	}
+}
 
 // enable plugin
 PLUGIN_API int XPluginEnable(void)
 {
-	static std::size_t enablingCounter = 0;
 	std::string selfEnableFilePath = getAircraftDir() + "/plugins/sasl/data/notselfenable.dat";
-	bool needReloadPanel = !fileDoesExist(selfEnableFilePath);
 
 	options = Options(getConfigFileName());
-
-	fakeWindow = 0;
-
-	reloadCommand = XPLMCreateCommand("sasl/reload", "Reload SASL avionics");
-	XPLMRegisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
-
-	XPLMRegisterKeySniffer(handleKeyboardEvent, 0, NULL);
-
-	if ((fileDoesExist(selfEnableFilePath) && enablingCounter == 0) || 
-		needReloadPanel || enablingCounter > 1) {
-
-		reloadPanel(false);
-	}
-
-	XPLMRegisterFlightLoopCallback(updateAvionics, -5, NULL);
-
-	if (fileDoesExist(selfEnableFilePath) && enablingCounter == 0) {
-		XPLMDebugString("SASL: find no-self-enable option for graphics callbacks, waiting for the Aircraft Plugin Manager or for manual enabling\n");
-		enablingCounter++;
-		disabled = true;
-
-		return 0;
-	}
-
 	disabled = false;
 
-	if (!XPLMRegisterDrawCallback(drawGauges, xplm_Phase_Gauges, 0, NULL))
-		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Gauges\n");
-	if (!XPLMRegisterDrawCallback(drawPopups, xplm_Phase_Window, 0, NULL))
-		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Window\n");
-	if (!XPLMRegisterDrawCallback(drawScene, xplm_Phase_Objects, 0, NULL))
-		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Objects\n");
-	if (!XPLMRegisterDrawCallback(drawLast2d, xplm_Phase_Window, 0, NULL))
-		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Window (last 2d)\n");
-	if (!XPLMRegisterDrawCallback(drawAirplanes, xplm_Phase_Airplanes, 0, NULL))
-		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_Airplanes\n");
-	if (!XPLMRegisterDrawCallback(drawLastScene, xplm_Phase_LastScene, 0, NULL))
-		XPLMDebugString("SASL: Error registering draw callback at xplm_Phase_LastScene with experimental features\n");
+	fakeWindow = 0;
+	reloadCommand = XPLMCreateCommand("sasl/reload", "Reload SASL avionics");
+	XPLMRegisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
+	XPLMRegisterKeySniffer(handleKeyboardEvent, 0, NULL);
 
-	enablingCounter++;
-    return 1;
+	reloadPanel(false);
+
+
+	XPLMRegisterFlightLoopCallback(updateAvionics, -1, NULL);
+
+	if (fileDoesExist(selfEnableFilePath)) {
+		XPLMDebugString("[SASL] Found no-self-enable option for graphics callbacks, waiting for the Aircraft Plugin Manager or for manual enabling\n");
+
+		return 1;
+	}
+
+	registerGraphics();
+
+	return 1;
 }
 
-
-
-PLUGIN_API void XPluginReceiveMessage(XPLMPluginID fromWho, 
-        long message, void *param)
+PLUGIN_API void XPluginReceiveMessage(XPLMPluginID fromWho,
+	long message, void *param)
 {
-    if ((XPLM_MSG_PLANE_CRASHED == message) || 
-            ((XPLM_MSG_PLANE_LOADED == message) && (! param)))
-        reloadPanel(false);
-    else {
-        if (! sasl)
-            return;
-        switch (message) {
-            case XPLM_MSG_AIRPORT_LOADED:
-                callCallback("onAirportLoaded");
-                break;
-            case XPLM_MSG_SCENERY_LOADED:
-                callCallback("onSceneryLoaded");
-                break;
-            case XPLM_MSG_AIRPLANE_COUNT_CHANGED:
-                callCallback("onAirplaneCountChanged");
-                break;
-            default:
-                handleMessage(sasl_get_lua(sasl), fromWho, message, param);
-        }
-    }
+	if ((XPLM_MSG_PLANE_CRASHED == message) ||
+		((XPLM_MSG_PLANE_LOADED == message) && (!param)))
+		reloadPanel(false);
+	else {
+		if (!sasl)
+			return;
+		switch (message) {
+		case XPLM_MSG_AIRPORT_LOADED:
+			callCallback("onAirportLoaded");
+			break;
+		case XPLM_MSG_SCENERY_LOADED:
+			callCallback("onSceneryLoaded");
+			break;
+		case XPLM_MSG_AIRPLANE_COUNT_CHANGED:
+			callCallback("onAirplaneCountChanged");
+			break;
+		case MSG_PLMANAGER_REGISTER_GRAPHICS:
+			if (!graphicsRegistered) {
+				registerGraphics();
+			}
+			break;
+		default:
+			handleMessage(sasl_get_lua(sasl), fromWho, message, param);
+		}
+	}
 }
-

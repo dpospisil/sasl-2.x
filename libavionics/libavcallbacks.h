@@ -306,6 +306,12 @@ struct SaslSoundCallbacks;
 typedef int (*sasl_sample_load_callback)(struct SaslSoundCallbacks *sound, 
         const char *fileName);
 
+/// Load sample into memory reversed.  Returns sample handler or 0 if can't load sample
+/// \param sound sound callbacks structure.
+/// \param fileName path to sample on disk
+typedef int (*sasl_sample_load_reversed_callback)(struct SaslSoundCallbacks *sound, 
+        const char *fileName);
+		
 /// Unload sample
 /// \param sound sound callbacks structure.
 /// \param sampleId sample handler
@@ -468,9 +474,15 @@ typedef void (*sasl_set_master_gain_callback)(struct SaslSoundCallbacks *sound,
 /// \param sound sound callbacks structure.
 typedef void (*sasl_sound_update_callback)(struct SaslSoundCallbacks *sound);
 
+/// Returns current state of SASL sound contexts
+/// \param sound sound callbacks structure.
+typedef void (*sasl_get_contexts_state_callback)(struct SaslSoundCallbacks *sound,
+	int* sources, int* sources_context_limit);
+
 // sound callbacks
 struct SaslSoundCallbacks {
     sasl_sample_load_callback load;
+	sasl_sample_load_reversed_callback load_reversed;
     sasl_sample_unload_callback unload;
     sasl_sample_play_callback play;
     sasl_sample_stop_callback stop;
@@ -498,6 +510,7 @@ struct SaslSoundCallbacks {
     sasl_listener_get_orientation_callback get_listener_orientation;
     sasl_set_master_gain_callback set_master_gain;
     sasl_sound_update_callback update;
+	sasl_get_contexts_state_callback get_contexts_state;
 };
 
 

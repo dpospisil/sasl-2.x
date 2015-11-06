@@ -1400,6 +1400,27 @@ function loadSample(fileName)
     return s
 end
 
+-- load reversed sample
+function loadSampleReversed(fileName)
+    for _, v in ipairs(searchImagePath) do
+        local f = v .. '/' .. fileName
+        if isFileExists(f) then
+            return loadSampleInReverse(f)
+        end
+    end
+
+    if not isFileExists(fileName) then
+        logError("Can't find sound", fileName)
+        return 0
+    end
+
+    local s = loadSampleInReverse(fileName)
+    if 0 == s then
+        logError("Can't load sound", fileName)
+    end
+    return s
+end
+
 
 -- play sound inside of cockpit
 SOUND_INTERNAL = 1
@@ -1461,11 +1482,28 @@ function table.merge(t1, t2)
 	return t 
 end
 
+local function transpose(x)
+	local r = {}
+	
+	for i=1,#x[1] do
+		r[i]={}
+		for j=1,#x do
+			r[i][j] = x[j][i]
+		end
+	end
+	
+	return r
+end
+
 -- extracts N-dimensinal table into one table
-local function extractArrayData(arr) 
+function extractArrayData(arr) 
 	if assert(type(arr[1]))~='table' then     
 		return arr    
 	else
+		if assert(type(arr[1][1]))~='table' then
+			arr = transpose(arr)
+		end
+		
 		local res={}  
 		for i=1, #arr do   
 			res = table.merge(res, extractArrayData(arr[i]))      
