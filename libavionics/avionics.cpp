@@ -10,6 +10,7 @@
 
 
 using namespace xa;
+void exportFrameCounterToLua(Luna& lua);
 
 
 Avionics::Avionics(const std::string &path, 
@@ -34,9 +35,21 @@ Avionics::Avionics(const std::string &path,
     exportTextureToLua(lua);
     exportFontToLua(lua);
     exportPropsToLua(lua);
+	exportFrameCounterToLua(lua);
     sound.exportSoundToLua(lua);
 
     clickEmulation = false;
+}
+
+static int luaGetFrameCounter(lua_State* L) {
+	Avionics* avionics = getAvionics(L);
+	lua_pushnumber(L, avionics->getFrameCounter());
+	return 1;
+}
+
+void exportFrameCounterToLua(Luna& lua) {
+	lua_State* L = lua.getLua();
+	LUA_REGISTER(L, "getFrameCounter", luaGetFrameCounter);
 }
 
 Avionics::~Avionics()
@@ -59,6 +72,14 @@ int Avionics::initLua()
     addSearchImagePath(path + "/images");
 
     return 0;
+}
+
+void Avionics::setFrameCounter(const int& counter) {
+	frameCounter = counter;
+}
+
+int Avionics::getFrameCounter() const {
+	return frameCounter;
 }
 
 void Avionics::setPanelResolution(int width, int height)
@@ -130,8 +151,9 @@ int Avionics::loadPanel(const std::string &fileName)
     return 0;
 }
 
-void Avionics::update()
+void Avionics::update(const int& counter)
 {
+	setFrameCounter(counter);
     if (properties.update())
         log.error("Error updating properties");
 

@@ -299,8 +299,9 @@ function globalPropertyd(name, default)
 end
 
 -- create new double property and set default value
-function createGlobalPropertyd(name, default)
-    local ref = createProp(name, 'double', default)
+function createGlobalPropertyd(name, default, notPublishInDRE)    
+	if notPublishInDRE == nil then notPublishInDRE = 0 end
+	local ref = createProp(name, 'double', default, notPublishInDRE)
     return globalPropertyd(name, default)
 end
 
@@ -322,8 +323,9 @@ function globalPropertyf(name, default)
 end
 
 -- create new float property and set default value
-function createGlobalPropertyf(name, default)
-    local ref = createProp(name, 'float', default)
+function createGlobalPropertyf(name, default, notPublishInDRE)
+	if notPublishInDRE == nil then notPublishInDRE = 0 end
+    local ref = createProp(name, 'float', default, notPublishInDRE)
     return globalPropertyf(name, default)
 end
 
@@ -345,8 +347,9 @@ function globalPropertyi(name, default)
 end
 
 -- create new float property and set default value
-function createGlobalPropertyi(name, default)
-    local ref = createProp(name, 'int', default)
+function createGlobalPropertyi(name, default, notPublishInDRE)
+	if notPublishInDRE == nil then notPublishInDRE = 0 end
+    local ref = createProp(name, 'int', default, notPublishInDRE)
     return globalPropertyi(name, default)
 end
 
@@ -367,8 +370,9 @@ function globalPropertys(name, default)
 end
 
 -- create new string property and set default value
-function createGlobalPropertys(name, maxLen, default)
-    local ref = createProp(name, 'string', maxLen, default)
+function createGlobalPropertys(name, maxLen, default, notPublishInDRE)
+	if notPublishInDRE == nil then notPublishInDRE = 0 end
+    local ref = createProp(name, 'string', maxLen, default, notPublishInDRE)
     return globalPropertys(name, default)
 end
 
@@ -1380,11 +1384,12 @@ end
 
 -- load sample from file
 -- find file using the same rules as for textures
-function loadSample(fileName)
+function loadSample(fileName, createTimer)
+	if createTimer == nil then createTimer = 0 end
     for _, v in ipairs(searchImagePath) do
         local f = v .. '/' .. fileName
         if isFileExists(f) then
-            return loadSampleFromFile(f)
+            return loadSampleFromFile(f, createTimer)
         end
     end
 
@@ -1393,7 +1398,7 @@ function loadSample(fileName)
         return 0
     end
 
-    local s = loadSampleFromFile(fileName)
+    local s = loadSampleFromFile(fileName, createTimer)
     if 0 == s then
         logError("Can't load sound", fileName)
     end
@@ -1401,11 +1406,12 @@ function loadSample(fileName)
 end
 
 -- load reversed sample
-function loadSampleReversed(fileName)
+function loadSampleReversed(fileName, createTimer)
+	if createTimer == nil then createTimer = 0 end
     for _, v in ipairs(searchImagePath) do
         local f = v .. '/' .. fileName
         if isFileExists(f) then
-            return loadSampleInReverse(f)
+            return loadSampleInReverse(f, createTimer)
         end
     end
 
@@ -1414,7 +1420,7 @@ function loadSampleReversed(fileName)
         return 0
     end
 
-    local s = loadSampleInReverse(fileName)
+    local s = loadSampleInReverse(fileName, createTimer)
     if 0 == s then
         logError("Can't load sound", fileName)
     end
@@ -1560,3 +1566,26 @@ function interpolate(x, interp, flag)
 	return #res==1 and res[1] or res
 end
 
+-- OpenGL identifiers for blending
+BLEND_SOURCE_COLOR = 0x0300
+BLEND_ONE_MINUS_SOURCE_COLOR = 0x0301
+BLEND_SOURCE_ALPHA = 0x0302
+BLEND_ONE_MINUS_SOURCE_ALPHA = 0x0303
+BLEND_DESTINATION_ALPHA = 0x0304
+BLEND_ONE_MINUS_DESTINATION_ALPHA = 0x0305
+BLEND_DESTINATION_COLOR = 0x0306
+BLEND_ONE_MINUS_DESTINATION_COLOR = 0x0307
+BLEND_SOURCE_ALPHA_SATURATE = 0x0308
+
+BLEND_CONSTANT_COLOR = 0x8001
+BLEND_ONE_MINUS_CONSTANT_COLOR = 0x8002
+BLEND_CONSTANT_ALPHA = 0x8003
+BLEND_ONE_MINUS_CONSTANT_ALPHA = 0x8004
+
+BLEND_EQUATION_MIN = 0x8007
+BLEND_EQUATION_MAX = 0x8008
+BLEND_EQUATION_SUBTRACT = 0x800A
+BLEND_EQUATION_REVERSE_SUBTRACT = 0x800B
+
+-- Default blend equation value		
+BLEND_EQUATION_ADD = 0x8006

@@ -110,7 +110,8 @@ int sasl_enable_click_emulator(SASL sasl, int enable);
 /// Update gauges.
 /// Call it on each frame
 /// \param sasl SASL handler.
-int sasl_update(SASL sasl);
+/// \param counter SIM frame counter
+int sasl_update(SASL sasl, const int& counter);
 
 /// Draw panel.
 /// It assumes that screen that rendering context was setup properly
@@ -157,7 +158,8 @@ SaslPropRef sasl_get_prop_ref(SASL sasl, const char *name, int type);
 /// \param sasl SASL handler.
 /// \param name name of property.
 /// \param type must be PROP_INT, PROP_FLOAT or PROP_DOUBLE
-SaslPropRef sasl_create_prop(SASL sasl, const char *name, int type);
+/// \param notPublish must be true, if property must to be not published.
+SaslPropRef sasl_create_prop(SASL sasl, const char *name, int type, bool notPublish);
 
 
 /// Destroy unneeded property reference
@@ -268,12 +270,14 @@ void sasl_set_sound_engine(SASL sasl, struct SaslSoundCallbacks *callbacks);
 /// Load sample into memory.  Returns sample handler or 0 if can't load sample
 /// \param sasl SASL handler.
 /// \param fileName path to sample on disk
-int sasl_sample_load(SASL sasl, const char *fileName);
+/// \param needTimer for timer creating
+int sasl_sample_load(SASL sasl, const char *fileName, bool needTimer);
 
 /// Load sample into memory.  Returns sample handler or 0 if can't load sample
 /// \param sasl SASL handler.
 /// \param fileName path to sample on disk
-int sasl_sample_load_reversed(SASL sasl, const char *fileName);
+/// \param needTimer for timer creating
+int sasl_sample_load_reversed(SASL sasl, const char *fileName, bool needTimer);
 
 /// Unload sample
 /// \param sasl SASL handler.
@@ -312,6 +316,12 @@ void sasl_sample_rewind(SASL sasl, int sampleId);
 /// \param sasl SASL handler.
 /// \param sampleId sample handler
 int sasl_sample_is_playing(SASL sasl, int sampleId);
+
+/// Returns time in seconds that left to play for current sample if 
+/// timer for this sample was created previously
+/// \param sasl SASL handler
+/// \param sampleId sample handler
+void sasl_get_sample_playing_left(SASL sasl, int sampleId, double* left);
 
 /// Set gain of all samples
 /// \param sasl SASL handler.

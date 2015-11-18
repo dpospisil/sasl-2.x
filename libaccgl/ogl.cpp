@@ -58,7 +58,11 @@ static DeleteFramebuffers glDeleteFramebuffers = NULL;
 typedef void(*GenerateMipmap)(GLenum target);
 static GenerateMipmap glGenerateMipmap = NULL;
 
+typedef void(*BlendFuncSeparate)(GLenum srcRGB, GLenum destRGB, GLenum srcAlpha, GLenum destAlpha);
+static BlendFuncSeparate glBlendFuncSeparate = NULL;
 
+typedef void(*BlendEquationSeparate)(GLenum modeRGB, GLenum modeAlpha);
+static BlendEquationSeparate glBlendEquationSeparate = NULL;
 
 // opengl defines
 #ifndef GL_FRAMEBUFFER_COMPLETE
@@ -105,7 +109,51 @@ static GenerateMipmap glGenerateMipmap = NULL;
 #define GL_CLAMP_TO_EDGE				0x812F
 #endif
 
+#ifndef GL_CONSTANT_COLOR
+#define GL_CONSTANT_COLOR				0x8001
+#endif
+
+#ifndef GL_ONE_MINUS_CONSTANT_COLOR
+#define GL_ONE_MINUS_CONSTANT_COLOR				0x8002
+#endif
+
+#ifndef GL_CONSTANT_ALPHA
+#define GL_CONSTANT_ALPHA				0x8003
+#endif
+
+#ifndef GL_ONE_MINUS_CONSTANT_ALPHA
+#define GL_ONE_MINUS_CONSTANT_ALPHA				0x8004
+#endif
+
+#ifndef GL_MIN
+#define GL_MIN				0x8007
+#endif
+
+#ifndef GL_MAX
+#define GL_MAX				0x8008
+#endif
+
+#ifndef GL_FUNC_ADD
+#define GL_FUNC_ADD				0x8006
+#endif
+
+#ifndef GL_FUNC_SUBTRACT
+#define GL_FUNC_SUBTRACT				0x800A
+#endif
+
+#ifndef GL_FUNC_REVERSE_SUBTRACT
+#define GL_FUNC_REVERSE_SUBTRACT				0x800B
+#endif
+
 #endif // APL
+
+#if !defined(LIN) && !defined(APL)
+typedef void(*BlendEquation)(GLenum mode);
+static BlendEquation glBlendEquation = NULL;
+
+typedef void(*BlendColor)(GLfloat R, GLfloat G, GLfloat B, GLfloat A);
+static BlendColor glBlendColor = NULL;
+#endif
 
 // rectangle, for now used to define clip areas only
 struct Rect {
@@ -177,16 +225,22 @@ struct OglCanvas
 
 	// true if FBO functions allowed to use
 	bool fboAvailable;
-
+	
+	// true if advanced blending available
+	bool advancedBlendingAvailable;
+	
 	// map of FBOs by texture IDs
 	std::map<int, GLuint> fboByTex;
 
 	// RBOs, binded to FBOs
 	std::vector<GLuint> RBOs;
-
+	
 	// default fbo
 	GLuint defaultFbo;
-
+	
+	// stored components render targets
+	std::vector<GLuint> renderTargetsIDs;	
+	
 	// render targets for specified components
 	std::size_t componentsRenderTargetsCounter;
 
@@ -837,10 +891,87 @@ static int getNewRenderTargetID(struct SaslGraphicsCallbacks *canvas, int contex
 
 	c->fboByTex.insert(c->fboByTex.begin(), std::make_pair(newTexID, newFBOID));
 	c->RBOs.insert(c->RBOs.begin(), newRBOID);
+	
+	c->renderTargetsIDs.push_back(newTexID);
 	c->componentsRenderTargetsCounter++;
 
 	return newTexID;
 }
+
+// Sets blending function for drawings
+static void setBlendFunc(struct SaslGraphicsCallbacks *canvas, int srcBlend, int dstBlend) {
+	OglCanvas *c = (OglCanvas*)canvas;
+	assert(canvas);
+	dumpBuffers(c);
+
+	glBlendFunc(GLenum(srcBlend), GLenum(dstBlend));
+}
+
+// Sets separate blending functions(RGB, Alpha) for drawings
+static void setBlendFuncSeparate(struct SaslGraphicsCallbacks *canvas, int srcBlendRGB, int dstBlendRGB,
+	int srcBlendAlpha, int dstBlendAlpha) {
+
+
+	OglCanvas *c = (OglCanvas*)canvas;
+	assert(canvas);
+	if (!c->advancedBlendingAvailable) {
+		return;
+	}
+	dumpBuffers(c);
+
+	glBlendFuncSeparate(GLenum(srcBlendRGB), GLenum(dstBlendRGB), 
+		GLenum(srcBlendAlpha), GLenum(dstBlendAlpha));
+}
+
+// Sets blending equation for drawings
+static void setBlendEquation(struct SaslGraphicsCallbacks *canvas, int blendMode) {
+	OglCanvas *c = (OglCanvas*)canvas;
+	assert(canvas);
+	if (!c->advancedBlendingAvailable) {
+		return;
+	}
+	dumpBuffers(c);
+
+	glBlendEquation(GLenum(blendMode));
+}
+
+// Sets separate blending equations(RGB, Alpha) for drawings
+static void setBlendEquationSeparate(struct SaslGraphicsCallbacks *canvas, int blendModeRGB, int blendModeAlpha) {
+	OglCanvas *c = (OglCanvas*)canvas;
+	assert(canvas);
+	if (!c->advancedBlendingAvailable) {
+		return;
+	}
+	dumpBuffers(c);
+
+	glBlendEquationSeparate(GLenum(blendModeRGB), GLenum(blendModeAlpha));
+}
+
+// Sets specific blending color
+static void setBlendColor(struct SaslGraphicsCallbacks *canvas, float R, float G, float B, float A) {
+	OglCanvas *c = (OglCanvas*)canvas;
+	assert(canvas);
+	if (!c->advancedBlendingAvailable) {
+		return;
+	}
+	dumpBuffers(c);
+
+	glBlendColor(R, G, B, A);
+}
+
+// Resets standard blending
+static void resetBlending(struct SaslGraphicsCallbacks *canvas) {
+	OglCanvas *c = (OglCanvas*)canvas;
+	assert(canvas);
+	dumpBuffers(c);
+
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	if (!c->advancedBlendingAvailable) {
+		return;
+	}
+	glBlendEquation(GLenum(0x8006));
+}
+
 
 // create new texture of specified size and store it under the same name 
 // as old texture
@@ -889,8 +1020,24 @@ static Func getProcAddress(const char *name)
 }
 #endif // APL
 
-// find pointers of OpenGL functions
-static bool initGlFunctions()
+// find pointers of OpenGL functions for advanced blending
+static bool initAdvBlendingGLfunctions() {
+#ifndef APL
+	glBlendFuncSeparate = (BlendFuncSeparate)getProcAddress("glBlendFuncSeparate");
+	glBlendEquationSeparate = (BlendEquationSeparate)getProcAddress("glBlendEquationSeparate");
+#endif // APL
+
+#if !defined(APL) && !defined(LIN)
+	glBlendEquation = (BlendEquation)getProcAddress("glBlendEquation");
+	glBlendColor = (BlendColor)getProcAddress("glBlendColor");
+#endif
+
+	return glBlendFuncSeparate && glBlendEquation && glBlendEquationSeparate &&
+		glBlendColor;
+}
+
+// find pointers of OpenGL functions for FBO using
+static bool initFBOGlfunctions()
 {
 #ifndef APL    
 	glGenRenderbuffers = (GenRenderbuffers)getProcAddress("glGenRenderbuffers");
@@ -941,12 +1088,19 @@ struct SaslGraphicsCallbacks* saslgl_init_graphics()
 	c->callbacks.set_render_target = setRenderTarget;
 	c->callbacks.get_new_render_target_id = getNewRenderTargetID;
 	c->callbacks.recreate_texture = recreateTexture;
+	c->callbacks.set_blend_func = setBlendFunc;
+	c->callbacks.set_blend_func_separate = setBlendFuncSeparate;
+	c->callbacks.set_blend_equation = setBlendEquation;
+	c->callbacks.set_blend_equation_separate = setBlendEquationSeparate;
+	c->callbacks.reset_blending = resetBlending;
+	c->callbacks.set_blend_color = setBlendColor;
 
 	c->binderCallback = NULL;
 	c->genTexNameCallback = NULL;
 	c->maxVertices = c->numVertices = 0;
 	c->vertexBuffer = c->texBuffer = c->colorBuffer = NULL;
-	c->fboAvailable = initGlFunctions();
+	c->fboAvailable = initFBOGlfunctions();
+	c->advancedBlendingAvailable = initAdvBlendingGLfunctions();
 	c->triangles = c->lines = c->textures = c->texturesSize = 0;
 	c->batches = c->batchTrans = c->batchNoTex = c->batchLines = 0;
 	c->currentTexture = 0;
@@ -968,15 +1122,17 @@ void saslgl_done_graphics(struct SaslGraphicsCallbacks *canvas)
 				i != c->fboByTex.end(); ++i) {
 
 				glDeleteFramebuffers(1, &(*i).second);
-				if (c->componentsRenderTargetsCounter) {
-					glDeleteTextures(1, (GLuint*)&(*i).first);
-					c->componentsRenderTargetsCounter--;
-				}
 			}
 		}
 
 		for (std::vector<GLuint>::iterator it = c->RBOs.begin(); it != c->RBOs.end(); ++it) {
 			glDeleteRenderbuffers(1, &(*it));
+		}
+
+		for (std::vector<GLuint>::iterator it = c->renderTargetsIDs.begin(); 
+			it != c->renderTargetsIDs.end(); ++it) {
+
+			glDeleteTextures(1, (GLuint*)&(*it));
 		}
 
 		free(c->vertexBuffer);

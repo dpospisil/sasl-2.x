@@ -59,6 +59,9 @@ struct CustomProperty
 
     /// property value
     Value data;
+	
+	/// published in DRE
+	bool published;
 };
 
 
@@ -764,10 +767,11 @@ static void registerProp(XPlaneProps *props, const char *name)
 
 
 /// Create integer property
-static SaslPropRef createIntProp(XPlaneProps *props, const char *name)
+static SaslPropRef createIntProp(XPlaneProps *props, const char *name, bool notPublish)
 {
     CustomProperty *prop = new CustomProperty;
     prop->data.intValue = 0;
+	prop->published = !notPublish;
     prop->ref = XPLMRegisterDataAccessor(name, xplmType_Int, 1, 
             readInt, writeInt,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -777,7 +781,9 @@ static SaslPropRef createIntProp(XPlaneProps *props, const char *name)
         return NULL;
     }
     props->customProps[name] = prop;
-    registerProp(props, name);
+	if (!notPublish) {
+		registerProp(props, name);
+	}
     return getPropRef(props, name, PROP_INT);
 }
 
@@ -801,11 +807,12 @@ static void writeFloat(void *refcon, float value)
         p->data.floatValue = value;
 }
 
-/// Create integer property
-static SaslPropRef createFloatProp(XPlaneProps *props, const char *name)
+/// Create float property
+static SaslPropRef createFloatProp(XPlaneProps *props, const char *name, bool notPublish)
 {
     CustomProperty *prop = new CustomProperty;
     prop->data.floatValue = 0;
+	prop->published = !notPublish;
     prop->ref = XPLMRegisterDataAccessor(name, xplmType_Float, 1, 
             NULL, NULL, readFloat, writeFloat,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -815,7 +822,9 @@ static SaslPropRef createFloatProp(XPlaneProps *props, const char *name)
         return NULL;
     }
     props->customProps[name] = prop;
-    registerProp(props, name);
+	if (!notPublish) {
+		registerProp(props, name);
+	}
     return getPropRef(props, name, PROP_FLOAT);
 }
 
@@ -840,11 +849,12 @@ static void writeDouble(void *refcon, double value)
 }
 
 
-/// Create integer property
-static SaslPropRef createDoubleProp(XPlaneProps *props, const char *name)
+/// Create double property
+static SaslPropRef createDoubleProp(XPlaneProps *props, const char *name, bool notPublish)
 {
     CustomProperty *prop = new CustomProperty;
     prop->data.doubleValue = 0;
+	prop->published = !notPublish;
     prop->ref = XPLMRegisterDataAccessor(name, xplmType_Double, 1, 
             NULL, NULL, NULL, NULL, readDouble, writeDouble,
             NULL, NULL, NULL, NULL, NULL, NULL,
@@ -854,7 +864,9 @@ static SaslPropRef createDoubleProp(XPlaneProps *props, const char *name)
         return NULL;
     }
     props->customProps[name] = prop;
-    registerProp(props, name);
+	if (!notPublish) {
+		registerProp(props, name);
+	}
     return getPropRef(props, name, PROP_DOUBLE);
 }
 
@@ -890,13 +902,12 @@ static void writeString(void *refcon, void *value, int offset, int size)
     }
 }
 
-
-
 /// Create string property
 static SaslPropRef createStringProp(XPlaneProps *props, const char *name, 
-        int maxSize)
+        int maxSize, bool notPublish)
 {
     CustomProperty *prop = new CustomProperty;
+	prop->published = !notPublish;
     prop->ref = XPLMRegisterDataAccessor(name, xplmType_Data, 1, 
             NULL, NULL, NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL, readString, writeString,
@@ -906,14 +917,15 @@ static SaslPropRef createStringProp(XPlaneProps *props, const char *name,
         return NULL;
     }
     props->customProps[name] = prop;
-    registerProp(props, name);
+	if (!notPublish) {
+		registerProp(props, name);
+	}
     return getPropRef(props, name, PROP_STRING);
 }
 
-
-/// Create new propery and returns reference to it.
+/// Create new property and returns reference to it.
 /// If property already exists just returns reference to it.
-static SaslPropRef createProp(SaslProps props, const char *name, int type, int maxSize)
+static SaslPropRef createProp(SaslProps props, const char *name, int type, int maxSize, bool notPublish)
 {
     XPlaneProps *p = (XPlaneProps*)props;
     if (! (p && name))
@@ -924,10 +936,10 @@ static SaslPropRef createProp(SaslProps props, const char *name, int type, int m
         return getPropRef(p, name, type);
 
     switch (type) {
-        case PROP_INT: return createIntProp(p, name);
-        case PROP_FLOAT: return createFloatProp(p, name);
-        case PROP_DOUBLE: return createDoubleProp(p, name);
-        case PROP_STRING: return createStringProp(p, name, maxSize);
+        case PROP_INT: return createIntProp(p, name, notPublish);
+        case PROP_FLOAT: return createFloatProp(p, name, notPublish);
+        case PROP_DOUBLE: return createDoubleProp(p, name, notPublish);
+        case PROP_STRING: return createStringProp(p, name, maxSize, notPublish);
     }
 
     return NULL;
@@ -959,7 +971,9 @@ static int updateProps(SaslProps props)
             for (CustomPropsMap::iterator i = p->customProps.begin(); 
                     i != p->customProps.end(); i++) 
             {
-                registerProp(p, (*i).first.c_str());
+				if ((*i).second->published) {
+					registerProp(p, (*i).first.c_str());
+				}
             }
         }
     }
