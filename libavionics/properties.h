@@ -56,8 +56,8 @@ class Properties
         /// Returns pointer to property with specified name or NULL if not found
         SaslPropRef getProp(const std::string &name, int type);
 
-        /// Create new property
-        SaslPropRef createProp(const std::string &name, int type, int maxSize=0);
+       /// Create new property
+        SaslPropRef createProp(const std::string &name, int type, int maxSize = 0, bool notPublish = false);
         
         /// Release property struture
         void freeProp(SaslPropRef prop);

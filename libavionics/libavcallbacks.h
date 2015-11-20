@@ -64,11 +64,12 @@ typedef int (*sasl_set_prop_string_callback)(SaslPropRef prop, const char *value
 #define PROP_STRING 4
 
 
-/// Create new propery and returns reference to it.
+/// Create new property and returns reference to it.
 /// If property already exists just returns reference to it.
 /// maxSize is maximum size for string properties, ignored for other types
+/// notPublish must be true, if there is no need to register property in DRE
 typedef SaslPropRef (*sasl_create_prop_callback)(SaslProps props, const char *name, 
-            int type, int maxSize);
+            int type, int maxSize, bool notPublish);
 
 /// Get value of functional property.
 /// type - type of requested value
@@ -265,6 +266,24 @@ typedef int (*sasl_get_new_render_target_id)(struct SaslGraphicsCallbacks *canva
 typedef void (*sasl_recreate_texture)(struct SaslGraphicsCallbacks *canvas, 
         int textureId, int width, int height);
 
+// sets blending function for drawings
+typedef void (*sasl_set_blend_func)(struct SaslGraphicsCallbacks *canvas, int srcBlend, int dstBlend);
+
+// sets separate blending functions(RGB, Alpha) for drawings
+typedef void (*sasl_set_blend_func_separate)(struct SaslGraphicsCallbacks *canvas, int srcBlendRGB, int dstBlendRGB,
+	int srcBlendAlpha, int dstBlendAlpha);
+
+// sets blending equation for drawings
+typedef void (*sasl_set_blend_equation)(struct SaslGraphicsCallbacks *canvas, int blendMode);
+
+// sets separate blending equations(RGB, Alpha) for drawings
+typedef void (*sasl_set_blend_equation_separate)(struct SaslGraphicsCallbacks *canvas, int blendModeRGB, int blendModeAlpha);
+
+// resets standard blending
+typedef void (*sasl_reset_blending)(struct SaslGraphicsCallbacks *canvas);
+
+// sets specific blending color
+typedef void (*sasl_set_blend_color)(struct SaslGraphicsCallbacks *canvas, float R, float G, float B, float A);
 
 // graphics callbacks
 struct SaslGraphicsCallbacks {
@@ -289,6 +308,12 @@ struct SaslGraphicsCallbacks {
     sasl_set_render_target set_render_target;
 	sasl_get_new_render_target_id get_new_render_target_id;
     sasl_recreate_texture recreate_texture;
+	sasl_set_blend_func set_blend_func;
+	sasl_set_blend_func_separate set_blend_func_separate;
+	sasl_set_blend_equation set_blend_equation;
+	sasl_set_blend_equation_separate set_blend_equation_separate;
+	sasl_reset_blending reset_blending;
+	sasl_set_blend_color set_blend_color;
 };
 
 
@@ -303,14 +328,16 @@ struct SaslSoundCallbacks;
 /// Load sample into memory.  Returns sample handler or 0 if can't load sample
 /// \param sound sound callbacks structure.
 /// \param fileName path to sample on disk
+/// \param needTimer for timer creating
 typedef int (*sasl_sample_load_callback)(struct SaslSoundCallbacks *sound, 
-        const char *fileName);
+        const char *fileName, bool needTimer);
 
 /// Load sample into memory reversed.  Returns sample handler or 0 if can't load sample
 /// \param sound sound callbacks structure.
 /// \param fileName path to sample on disk
+/// \param needTimer for timer creating
 typedef int (*sasl_sample_load_reversed_callback)(struct SaslSoundCallbacks *sound, 
-        const char *fileName);
+        const char *fileName, bool needTimer);
 		
 /// Unload sample
 /// \param sound sound callbacks structure.
@@ -464,6 +491,13 @@ typedef void (*sasl_listener_get_orientation_callback)(struct SaslSoundCallbacks
 typedef int (*sasl_sample_is_playing_callback)(struct SaslSoundCallbacks *sound, 
         int sampleId);
 
+/// Returns time in seconds that left to play for current sample if 
+/// timer for this sample was created previously
+/// \param sasl SASL handler
+/// \param sampleId sample handler
+typedef void (*sasl_sample_get_playing_left_callback)(struct SaslSoundCallbacks *sound, int sampleId, double* left);
+
+		
 /// Set gain of all samples
 /// \param sound sound callbacks structure.
 /// \param gain gain ratio from 0 to 1000
@@ -490,6 +524,7 @@ struct SaslSoundCallbacks {
     sasl_sample_set_pitch_callback set_pitch;
     sasl_sample_rewind_callback rewind;
     sasl_sample_is_playing_callback is_playing;
+	sasl_sample_get_playing_left_callback get_sample_playing_left;
     sasl_sample_set_env_callback set_env;
     sasl_sample_get_env_callback get_env;
     sasl_sample_set_position_callback set_position;

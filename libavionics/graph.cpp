@@ -769,6 +769,66 @@ static int luaResetClipArea(lua_State *L)
 	return 0;
 }
 
+static int luaSetBlendFunc(lua_State *L)
+{
+	if (lua_gettop(L) != 2 && lua_gettop(L) != 4) {
+		return 0;
+	}
+	Avionics *avionics = getAvionics(L);
+	SaslGraphicsCallbacks *graphics = avionics->getGraphics();
+	assert(graphics);
+
+	if (lua_gettop(L) == 2) {
+		graphics->set_blend_func(graphics, lua_tonumber(L, 1), lua_tonumber(L, 2));
+	} else {
+		graphics->set_blend_func_separate(graphics, lua_tonumber(L, 1), lua_tonumber(L, 2),
+			lua_tonumber(L, 3), lua_tonumber(L, 3));
+	}
+
+	return 0;
+}
+
+static int luaSetBlendEquation(lua_State *L) {
+	if (lua_gettop(L) > 2) {
+		return 0;
+	}
+
+	Avionics *avionics = getAvionics(L);
+	SaslGraphicsCallbacks *graphics = avionics->getGraphics();
+	assert(graphics);
+
+	if (lua_gettop(L) == 1) {
+		graphics->set_blend_equation(graphics, lua_tonumber(L, 1));
+	} else {
+		graphics->set_blend_equation_separate(graphics, lua_tonumber(L, 1), lua_tonumber(L, 2));
+	}
+
+	return 0;
+}
+
+static int luaResetBlending(lua_State *L) {
+	Avionics *avionics = getAvionics(L);
+	SaslGraphicsCallbacks *graphics = avionics->getGraphics();
+	assert(graphics);
+
+	graphics->reset_blending(graphics);
+	return 0;
+}
+
+static int luaSetBlendColor(lua_State *L) {
+	if (lua_gettop(L) != 4) {
+		return 0;
+	}
+
+	Avionics *avionics = getAvionics(L);
+	SaslGraphicsCallbacks *graphics = avionics->getGraphics();
+	assert(graphics);
+
+	graphics->set_blend_color(graphics, lua_tonumber(L, 1), lua_tonumber(L, 2),
+		lua_tonumber(L, 3), lua_tonumber(L, 3));
+	return 0;
+}
+
 void xa::exportGraphToLua(Luna &lua)
 {
     lua_State *L = lua.getLua();
@@ -795,5 +855,9 @@ void xa::exportGraphToLua(Luna &lua)
 	LUA_REGISTER(L, "drawMaskEnd", luaDrawMaskEnd);
 	LUA_REGISTER(L, "setClipArea", luaSetClipArea);
 	LUA_REGISTER(L, "resetClipArea", luaResetClipArea);
+	LUA_REGISTER(L, "setBlendFunc", luaSetBlendFunc);
+	LUA_REGISTER(L, "setBlendEquation", luaSetBlendEquation);
+	LUA_REGISTER(L, "resetBlending", luaResetBlending);
+	LUA_REGISTER(L, "setBlendColor", luaSetBlendColor);
 }
 

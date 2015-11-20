@@ -137,10 +137,10 @@ int sasl_mouse_button_click(SASL sasl, int x, int y, int button, int layer)
     return 0;
 }
 
-int sasl_update(SASL sasl)
+int sasl_update(SASL sasl, const int& counter)
 {
     TRY
-        sasl->avionics->update();
+        sasl->avionics->update(counter);
         return 0;
     CATCH("updating avionics")
     return -1;
@@ -216,10 +216,10 @@ SaslPropRef sasl_get_prop_ref(SASL sasl, const char *name, int type)
     return NULL;
 }
 
-SaslPropRef sasl_create_prop(SASL sasl, const char *name, int type)
+SaslPropRef sasl_create_prop(SASL sasl, const char *name, int type, bool notPublish)
 {
     TRY
-        return sasl->avionics->getProps().createProp(name, type);
+        return sasl->avionics->getProps().createProp(name, type, 0, notPublish);
     CATCH("creating property")
     return NULL;
 }
@@ -342,18 +342,18 @@ void sasl_set_sound_engine(SASL sasl, struct SaslSoundCallbacks *callbacks)
 }
 
 
-int sasl_sample_load(SASL sasl, const char *fileName)
+int sasl_sample_load(SASL sasl, const char *fileName, bool needTimer)
 {
     TRY
-        return sasl->avionics->getSound().loadSample(fileName);
+        return sasl->avionics->getSound().loadSample(fileName, needTimer);
     CATCH("loading sound")
     return 0;
 }
 
-int sasl_sample_load_reversed(SASL sasl, const char *fileName)
+int sasl_sample_load_reversed(SASL sasl, const char *fileName, bool needTimer)
 {
 	TRY
-		return sasl->avionics->getSound().loadSampleReversed(fileName);
+		return sasl->avionics->getSound().loadSampleReversed(fileName, needTimer);
 	CATCH("loading sound reversed")
 	return 0;
 }
@@ -410,6 +410,18 @@ int sasl_sample_is_playing(SASL sasl, int sampleId)
         return sasl->avionics->getSound().isSamplePlaying(sampleId);
     CATCH("testing sound is playing")
     return 0;
+}
+
+void sasl_get_sample_playing_left(SASL sasl, int sampleId, double* left)
+{
+	TRY
+		double dleft;
+		sasl->avionics->getSound().getSamplePlayingLeft(sampleId, dleft);
+
+		if (left) {
+			*left = dleft;
+		}
+	CATCH("getting playing time left")
 }
 
 void sasl_set_master_gain(SASL sasl, int gain)

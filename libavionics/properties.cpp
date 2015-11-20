@@ -59,6 +59,8 @@ static int luaCreateProp(lua_State *L)
         return 1;
     }
 
+	bool notPublish = false;
+
     std::string propName = lua_tostring(L, 1);
     int type = getPropType(lua_tostring(L, 2));
     int maxLen = 0;
@@ -66,9 +68,16 @@ static int luaCreateProp(lua_State *L)
     if (PROP_STRING == type) {
         maxLen = lua_tonumber(L, 3);
         valArg++;
-    }
+		if (lua_gettop(L) == 5) {
+			notPublish = (bool)lua_tointeger(L, 5);
+		}
+	} else {
+		if (lua_gettop(L) == 4) {
+			notPublish = (bool)lua_tointeger(L, 4);
+		}
+	}
 
-    SaslPropRef prop = getAvionics(L)->getProps().createProp(propName, type, maxLen);
+    SaslPropRef prop = getAvionics(L)->getProps().createProp(propName, type, maxLen, notPublish);
 
     if (prop) {
         if (! lua_isnil(L, valArg)) {
@@ -306,12 +315,12 @@ SaslPropRef Properties::getProp(const std::string &name, int type)
 }
 
 
-SaslPropRef Properties::createProp(const std::string &name, int type, int maxSize)
+SaslPropRef Properties::createProp(const std::string &name, int type, int maxSize, bool notPublish)
 {
     if (! (propsCallbacks && props))
         return NULL;
 
-    return propsCallbacks->create_prop(props, name.c_str(), type, maxSize);
+    return propsCallbacks->create_prop(props, name.c_str(), type, maxSize, notPublish);
 }
 
 

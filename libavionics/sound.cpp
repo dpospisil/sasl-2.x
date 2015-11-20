@@ -19,18 +19,18 @@ void Sound::setCallbacks(SaslSoundCallbacks *callbacks)
 }
 
 
-int Sound::loadSample(const char *fileName)
+int Sound::loadSample(const char *fileName, bool needTimer)
 {
     if (sound && sound->load)
-        return sound->load(sound, fileName);
+        return sound->load(sound, fileName, needTimer);
     else
         return 0;
 }
 
-int Sound::loadSampleReversed(const char *fileName)
+int Sound::loadSampleReversed(const char *fileName, bool needTimer)
 {
 	if (sound && sound->load_reversed)
-		return sound->load_reversed(sound, fileName);
+		return sound->load_reversed(sound, fileName, needTimer);
 	else
 		return 0;
 }
@@ -219,6 +219,12 @@ bool Sound::isSamplePlaying(int sampleId)
         return false;
 }
 
+void Sound::getSamplePlayingLeft(int sampleId, double& left)
+{
+	if (sound && sound->get_sample_playing_left) {
+		sound->get_sample_playing_left(sound, sampleId, &left);
+	} 
+}
 
 void Sound::setMasterGain(int gain)
 {
@@ -242,14 +248,22 @@ void Sound::getContextsState(int& sources, int& context_source_limit)
 
 static int luaLoadSample(lua_State *L)
 {
-    int sampleId = getAvionics(L)->getSound().loadSample(lua_tostring(L, 1));
+	bool needTimer = false;
+	if (lua_gettop(L) == 2) {
+		needTimer = (bool)lua_tonumber(L, 2);
+	}
+	int sampleId = getAvionics(L)->getSound().loadSample(lua_tostring(L, 1), needTimer);
     lua_pushnumber(L, sampleId);
     return 1;
 }
 
 static int luaLoadSampleInReverse(lua_State *L)
 {
-	int sampleId = getAvionics(L)->getSound().loadSampleReversed(lua_tostring(L, 1));
+	bool needTimer = false;
+	if (lua_gettop(L) == 2) {
+		needTimer = (bool)lua_tonumber(L, 2);
+	}
+	int sampleId = getAvionics(L)->getSound().loadSampleReversed(lua_tostring(L, 1), needTimer);
 	lua_pushnumber(L, sampleId);
 	return 1;
 }
@@ -308,6 +322,14 @@ static int luaIsSamplePlaying(lua_State *L)
     return 1;
 }
 
+static int luaGetSamplePlayingLeft(lua_State* L)
+{
+	double playing_left;
+	getAvionics(L)->getSound().getSamplePlayingLeft(lua_tonumber(L, 1),
+		playing_left);
+	lua_pushnumber(L, playing_left);
+	return 1;
+}
 
 static int luaSetMasterGain(lua_State *L)
 {
@@ -515,6 +537,7 @@ void Sound::exportSoundToLua(Luna &lua)
     LUA_REGISTER(L, "setSamplePitch", luaSampleSetPitch);
     LUA_REGISTER(L, "rewindSample", luaSampleRewind);
     LUA_REGISTER(L, "isSamplePlaying", luaIsSamplePlaying);
+	LUA_REGISTER(L, "getSamplePlayingRemaining", luaGetSamplePlayingLeft);
     LUA_REGISTER(L, "setMasterGain", luaSetMasterGain);
     LUA_REGISTER(L, "setSampleEnv", luaSetSampleEnv);
     LUA_REGISTER(L, "getSampleEnv", luaGetSampleEnv);

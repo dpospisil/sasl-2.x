@@ -24,13 +24,15 @@ class Sound
         /// \param callbacks sound engine callbacks.
         void setCallbacks(SaslSoundCallbacks *callbacks);
 
-        /// Load sample into memory.  Returns sample handler or 0 if can't load sample
+         /// Load sample into memory.  Returns sample handler or 0 if can't load sample
         /// \param fileName path to sample on disk
-        int loadSample(const char *fileName);
+		/// \param needTimer for timer creating
+        int loadSample(const char *fileName, bool needTimer);
         
 		/// Load sample into memory reversed.  Returns sample handler or 0 if can't load sample
 		/// \param fileName path to sample on disk
-		int loadSampleReversed(const char *fileName);
+		/// \param needTimer for timer creating
+		int loadSampleReversed(const char *fileName, bool needTimer);
 		
         /// Unload sample to free memory
         /// \param sampleId sample handler
@@ -176,7 +178,12 @@ class Sound
         /// Returns true if sample playing now
         /// \param sampleId sample handler
         bool isSamplePlaying(int sampleId);
-
+	
+		/// Returns time in seconds that left to play for current sample if 
+		/// timer for this sample was created previously
+		/// \param sampleId sample handler
+		void getSamplePlayingLeft(int sampleId, double& left);
+		
         /// Set gain for all samles
         /// \param gain gain ratio from 0 to 1000
         void setMasterGain(int gain);

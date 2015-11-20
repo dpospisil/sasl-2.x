@@ -17,7 +17,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 #   Linux
 #
 	set(SASL_OS "lin")
-	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} -DLIN=1 -DXPLM200 -DNDEBUG=1 -DSNAPSHOT=${SASL_SNAPSHOT} -Wall -fPIC -fno-stack-protector")
+	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} -DLIN=1 -DXPLM200 -DXPLM210 -DNDEBUG=1 -DSNAPSHOT=${SASL_SNAPSHOT} -Wall -fPIC -fno-stack-protector")
 	set(SASL_INCL_DIRS "${SASL_INCL_DIRS}" "/usr/include/SOIL")
 	set(SASL_LINK_LIBS luajit /usr/lib/libSOIL.a)
 
@@ -28,7 +28,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 #
     set(SASL_OS "mac")
 	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} -D__APPLE__ -DAPL=1 -DSNAPSHOT=${SASL_SNAPSHOT}")
-	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} -fno-stack-protector -DXPLM200 -fvisibility=hidden -ffast-math -fno-rtti -fno-exceptions")
+	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} -fno-stack-protector -DXPLM200 -DXPLM210 -fvisibility=hidden -ffast-math -fno-rtti -fno-exceptions")
     set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} -arch x86_64 -mmacosx-version-min=10.7")
 
 	set(SASL_INCL_DIRS "/opt/local/include/SOIL")
@@ -44,7 +44,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 #   Windows
 #
 	set(SASL_OS "win")
-	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} /DIBM=1 /DXPLM200  /DSNAPSHOT=${SASL_SNAPSHOT}")
+	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} /DIBM=1 /DXPLM200  /DXPLM210 /DSNAPSHOT=${SASL_SNAPSHOT}")
 	set(SASL_CXX_FLAGS "${SASL_CXX_FLAGS} /DNDEBUG /EHsc /DWINDOWS /nologo /MT /O2 /GL /DNDEBUG /D_LIB /fp:precise /TP /DWIN32")
 	set(SASL_INCL_DIRS "${SASL_INCL_DIRS};${SASL_OPENAL}/include;${SASL_3RD_DIR}/include/SOIL")
 	

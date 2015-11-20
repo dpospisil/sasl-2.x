@@ -145,13 +145,45 @@ static void recreateTexture(struct SaslGraphicsCallbacks *canvas,
 {
 }
 
+// Sets blending function for drawings
+static void setBlendFunc(struct SaslGraphicsCallbacks *canvas, int srcBlend, int dstBlend) 
+{
+}
+
+// Sets separate blending functions(RGB, Alpha) for drawings
+static void setBlendFuncSeparate(struct SaslGraphicsCallbacks *canvas, int srcBlendRGB, int dstBlendRGB,
+	int srcBlendAlpha, int dstBlendAlpha) 
+{
+}
+
+// Sets blending equation for drawings
+static void setBlendEquation(struct SaslGraphicsCallbacks *canvas, int blendMode) 
+{
+}
+
+// Sets separate blending equations(RGB, Alpha) for drawings
+static void setBlendEquationSeparate(struct SaslGraphicsCallbacks *canvas, int blendModeRGB, int blendModeAlpha) 
+{
+}
+
+// Resets standard blending
+static void resetBlending(struct SaslGraphicsCallbacks *canvas) 
+{
+}
+
+// Sets specific blending color
+static void setBlendColor(struct SaslGraphicsCallbacks *canvas, float R, float G, float B, float A)
+{
+}
 
 static struct SaslGraphicsCallbacks callbacks = { drawBegin, drawEnd,
     loadTexture, freeTexture, drawLine, drawTriangle, drawTexturedTriangle,
 	drawMask, drawUnderMask, drawMaskEnd,
     setClipArea, resetClipArea, pushTransform, popTransform, 
     translateTransform, scaleTransform, rotateTransform, findTexture,
-    setRenderTarget, getNewRenderTargetID, recreateTexture };
+    setRenderTarget, getNewRenderTargetID, recreateTexture, setBlendFunc,
+	setBlendFuncSeparate, setBlendEquation, setBlendEquationSeparate, resetBlending,
+	setBlendColor};
 
 
 SaslGraphicsCallbacks* xa::getGraphicsStub()

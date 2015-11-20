@@ -397,7 +397,7 @@ static SaslPropRef getSaslPropRef(SaslProps props, const char *name, int type)
 }
 
 /// Get reference to property or create new property
-static SaslPropRef createProp(SaslProps props, const char *name, int type, int maxSize)
+static SaslPropRef createProp(SaslProps props, const char *name, int type, int maxSize, bool)
 {
     return createSaslPropRef(props, name, type, maxSize, 5);
 }

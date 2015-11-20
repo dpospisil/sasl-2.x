@@ -23,6 +23,7 @@ extern "C" {
     #endif
 }
 
+#include "telemetry.h"
 #include "main.h"
 #include "xpsdk.h"
 #include "libavionics.h"
@@ -47,6 +48,17 @@ static bool graphicsRegistered = false;
 
 using namespace xap;
 using namespace xap3d;
+
+#if defined(WIN32)
+// Telemetry collectors
+TelemetryCollector* _updateCollector = NULL;
+TelemetryCollector* _drawGaugesCollector = NULL;
+TelemetryCollector* _drawWindowsCollector = NULL;
+TelemetryCollector* _drawWindowsLastCollector = NULL;
+TelemetryCollector* _drawObjectsCollector = NULL;
+TelemetryCollector* _drawAirplanesCollector = NULL;
+TelemetryCollector* _drawLastSceneCollector = NULL;
+#endif
 
 // plugin is enabled or disabled
 static bool disabled = false;
@@ -395,6 +407,9 @@ static void updatePopupSize()
 /// draws gauges
 static int drawGauges(XPLMDrawingPhase phase, int isBefore, void *refcon)
 {
+#if defined(WIN32)
+	_drawGaugesCollector->start();
+#endif
     if (sasl /*&& XPLMGetDatai(panelRenderPass) == 2*/) {
         updatePanelSize();
 
@@ -406,7 +421,10 @@ static int drawGauges(XPLMDrawingPhase phase, int isBefore, void *refcon)
     
         glPopMatrix();
     }
-
+#if defined(WIN32)
+	_drawGaugesCollector->stop();
+	_drawGaugesCollector->write();
+#endif
     return 1;
 }
 
@@ -414,12 +432,18 @@ static int drawGauges(XPLMDrawingPhase phase, int isBefore, void *refcon)
 /// draws popups layer
 static int drawPopups(XPLMDrawingPhase phase, int isBefore, void *refcon)
 {
+#if defined(WIN32)
+	_drawWindowsCollector->start();
+#endif
     if (sasl) {
         updatePopupSize();
         XPLMSetGraphicsState(0, 1, 0, 0, 1, 0, 0);
         sasl_draw_panel(sasl, STAGE_POPUPS);
     }
-
+#if defined(WIN32)
+	_drawWindowsCollector->stop();
+	_drawWindowsCollector->write();
+#endif
     return 1;
 }
 
@@ -427,30 +451,58 @@ static int drawPopups(XPLMDrawingPhase phase, int isBefore, void *refcon)
 // draw objects
 static int drawScene(XPLMDrawingPhase phase, int isBefore, void *refcon)
 {
+#if defined(WIN32)
+	_drawObjectsCollector->start();
+#endif
     drawObjects();
     draw3d(phase);
+#if defined(WIN32)
+	_drawObjectsCollector->stop();
+	_drawObjectsCollector->write();
+#endif
     return 1;
 }
 
 // draw airplanes
 static int drawAirplanes(XPLMDrawingPhase phase, int isBefore, void *refcon)
 {
+#if defined(WIN32)
+	_drawAirplanesCollector->start();
+#endif
     draw3d(phase);
+#if defined(WIN32)
+	_drawAirplanesCollector->stop();
+	_drawAirplanesCollector->write();
+#endif
     return 1;
 }
 
 //draw last_scene additions
 static int drawLastScene(XPLMDrawingPhase phase, int isBefore, void *refcon)
 {
+#if defined(WIN32)
+	_drawLastSceneCollector->start();
+#endif
 	draw3d(phase);
+#if defined(WIN32)
+	_drawLastSceneCollector->stop();
+	_drawLastSceneCollector->write();
+#endif
 	return 1;
 }
 
 // reset draw phase
 static int drawLast2d(XPLMDrawingPhase phase, int isBefore, void *refcon)
 {
+#if defined(WIN32)
+	_drawWindowsLastCollector->start();
+#endif
     xap::frameFinished();
     xap3d::frameFinished();
+#if defined(WIN32)
+	_drawWindowsLastCollector->stop();
+	_drawWindowsLastCollector->write();
+#endif
     return 1;
 }
 
@@ -799,6 +851,9 @@ static float updateAvionics(float elapsedSinceLastCall,
                  float elapsedTimeSinceLastFlightLoop,  int counter,    
                  void *refcon)
 {
+#if defined(WIN32)
+	_updateCollector->start();
+#endif
     if (! fakeWindow)
 	 fakeWindow = createFakeWindow();
 	
@@ -829,9 +884,12 @@ static float updateAvionics(float elapsedSinceLastCall,
             handleCursor(fakeWindow, -1, -1, NULL);
         }
         updateListenerPosition(sasl);
-        sasl_update(sasl);
+        sasl_update(sasl, counter);
     }
-    
+#if defined(WIN32)
+	_updateCollector->stop();
+	_updateCollector->write(&counter);
+#endif
     return -1;
 }
 
@@ -969,6 +1027,16 @@ void unregisterGraphics() {
 // disable plugin
 PLUGIN_API void XPluginDisable(void)
 {
+#if defined(WIN32)
+	delete _updateCollector;
+	delete _drawGaugesCollector;
+	delete _drawObjectsCollector;
+	delete _drawWindowsCollector;
+	delete _drawWindowsLastCollector;
+	delete _drawAirplanesCollector;
+	delete _drawLastSceneCollector;
+#endif
+
 	XPLMUnregisterCommandHandler(reloadCommand, reloadPanelCallback, 0, NULL);
 	XPLMUnregisterFlightLoopCallback(updateAvionics, NULL);
 	XPLMUnregisterKeySniffer(handleKeyboardEvent, 0, NULL);
@@ -984,6 +1052,16 @@ PLUGIN_API void XPluginDisable(void)
 // enable plugin
 PLUGIN_API int XPluginEnable(void)
 {
+#if defined(WIN32)
+	_updateCollector = new TelemetryCollector("SASL update", "SASL", "1-sim.sasl", "SASL");
+	_drawGaugesCollector = new TelemetryCollector("Draw Phase Gauges", "SASL", "1-sim.sasl", "SASL", "Gauges", TelemetryCollector::DRAWING);
+	_drawObjectsCollector = new TelemetryCollector("Draw Phase Objects", "SASL", "1-sim.sasl", "SASL", "Objects", TelemetryCollector::DRAWING);
+	_drawWindowsCollector = new TelemetryCollector("Draw Phase Windows", "SASL", "1-sim.sasl", "SASL", "Windows", TelemetryCollector::DRAWING);
+	_drawWindowsLastCollector = new TelemetryCollector("Draw Phase Windows (Last 2D)", "SASL", "1-sim.sasl", "SASL", "WindowsLast", TelemetryCollector::DRAWING);
+	_drawAirplanesCollector = new TelemetryCollector("Draw Phase Airplanes", "SASL", "1-sim.sasl", "SASL", "Airplanes", TelemetryCollector::DRAWING);
+	_drawLastSceneCollector = new TelemetryCollector("Draw Phase Last Scene", "SASL", "1-sim.sasl", "SASL", "LastScene", TelemetryCollector::DRAWING);
+#endif
+
 	std::string selfEnableFilePath = getAircraftDir() + "/plugins/sasl/data/notselfenable.dat";
 
 	options = Options(getConfigFileName());

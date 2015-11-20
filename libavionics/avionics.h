@@ -79,6 +79,9 @@ class Avionics
 
         /// Sound related functions
         Sound sound;
+		
+		/// Internal SIM frame counter
+		int frameCounter;
 
     public:
         /// Initialize avionics internal data
@@ -107,7 +110,13 @@ class Avionics
         /// Load aircraft panel from specified location
         /// returns true on success or error on failure
         int loadPanel(const std::string &path);
+	
+		/// Sets current sim internal frame counter
+		void setFrameCounter(const int& counter);
 
+		/// Returns stored frame counter value
+		int getFrameCounter() const;
+	
         /// Draw panel
         void draw(int stage);
 
@@ -164,8 +173,8 @@ class Avionics
         /// Enable or disable clickable regions highlight
         void setShowClickable(bool show);
 
-        /// Proceed events on each frame
-        void update();
+       /// Proceed events on each frame
+        void update(const int& counter);
 
         /// Start props server
         int startPropsServer(int port, const std::string &secret);
