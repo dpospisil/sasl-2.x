@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <queue>
 #include <map>
 #include <algorithm>
 #include <stdio.h>
@@ -11,19 +12,7 @@
 #include <math.h>
 #include <fstream>
 
-#if APL
-#include <Carbon/Carbon.h>
-#include <OpenAL/al.h>
-#include <OpenAL/alc.h>
-#else
-#ifdef WINDOWS
-#include <al.h>
-#include <alc.h>
-#else
-#include <AL/al.h>
-#include <AL/alc.h>
-#endif
-#endif
+SASL ALChecker::sasl = NULL;
 
 namespace sasl {
 
@@ -32,19 +21,17 @@ namespace sasl {
 	{
 	private:
 		// saved old context
-		ALCcontext *oldContext;
-
+		ALCcontext* oldContext;
 	public:
 		// save old context and change to our context
 		ContextChanger(ALCcontext *context) {
 			oldContext = alcGetCurrentContext();
-			alcMakeContextCurrent(context);
-			alGetError();
+			alcCheck(alcMakeContextCurrent(context), alcGetContextsDevice(context));
 		};
 
 		// restore saved context
 		~ContextChanger() {
-			alcMakeContextCurrent(oldContext);
+			alcCheck(alcMakeContextCurrent(oldContext), alcGetContextsDevice(oldContext));
 		}
 	};
 
@@ -82,23 +69,25 @@ struct SaslAlSound
 	std::vector<ALCdevice*> devices;
 
 	ALCcontext* getAppropriateContext() {
-
-		int to_which_context = curSourceNumber / maxSourcesPerContext;
-		if (to_which_context > contexts.size() - 1) {
+		int inContext;
+		if (!freeIDs.empty()) {
+			return getContextBySample(freeIDs.front());
+		} else {
+			inContext = curSourceNumber / maxSourcesPerContext;
+			if (inContext > contexts.size() - 1) {
 #if APL
-			devices.push_back(alcOpenDevice("Generic Software"));
-			contexts.push_back(alcCreateContext(devices.back(), NULL));
+				devices.push_back(alcOpenDevice("Generic Software"));
+				alcCheck(contexts.push_back(alcCreateContext(devices.back(), NULL)), devices.back());
 #else
-			contexts.push_back(alcCreateContext(devices[0], NULL));
+				alcCheck(contexts.push_back(alcCreateContext(devices[0], NULL)), devices.back());
 #endif
-		} 
-
-		return contexts.back();
-
+			}
+			return contexts.back();
+		}
 	}
 
 	ALCcontext* getContextBySample(int inSampleID) {
-		return contexts[std::size_t(inSampleID / (maxSourcesPerContext + 1))];
+		return contexts[std::size_t((inSampleID - 1)  / maxSourcesPerContext)];
 	}
 
 	// OpenAL context
@@ -109,6 +98,9 @@ struct SaslAlSound
 
 	// sources in use
 	std::map<int, Source> sources;
+
+	// free IDs after sample unloads
+	std::queue<int> freeIDs;
 
 	// maximum source number
 	int curSourceNumber;
@@ -397,10 +389,17 @@ static int loadSoundIntoAL(struct SaslSoundCallbacks *callbacks, const char *fil
 		src.buffer = &b;
 	}
 
-	sound->curSourceNumber++;
-	sound->sources[sound->curSourceNumber] = src;
+	if (sound->freeIDs.empty()) {
+		sound->curSourceNumber++;
+		sound->sources[sound->curSourceNumber] = src;
 
-	return sound->curSourceNumber;
+		return sound->curSourceNumber;
+	} else {
+		int sourceSoundID = sound->freeIDs.front();
+		sound->freeIDs.pop();
+		sound->sources[sourceSoundID] = src;
+		return sourceSoundID;
+	}
 }
 
 static int loadSound(struct SaslSoundCallbacks *callbacks, const char *fileName, bool needTimer)
@@ -420,7 +419,7 @@ static void deleteBuffer(SaslAlSound *sound, ALuint id)
 		i != sound->buffers.end(); ++i)
 	{
 		if ((*i).second.id == id) {
-			alDeleteBuffers(1, &(*i).second.id);
+			alCheck(alDeleteBuffers(1, &(*i).second.id));
 			sound->buffers.erase(i);
 			return;
 		}
@@ -444,7 +443,7 @@ static void unloadSound(struct SaslSoundCallbacks *s, int sampleId)
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
 
-	alDeleteSources(1, &source.id);
+	alCheck(alDeleteSources(1, &source.id));
 
 	source.buffer->usage--;
 	if (0 >= source.buffer->usage)
@@ -455,6 +454,8 @@ static void unloadSound(struct SaslSoundCallbacks *s, int sampleId)
 		source.timer = NULL;
 	}
 	sound->sources.erase(i);
+
+	sound->freeIDs.push(sampleId);
 }
 
 
@@ -497,7 +498,7 @@ static void playSound(struct SaslSoundCallbacks *s, int sampleId, int loop)
 
 	ALuint err = alGetError();
 	if (AL_NO_ERROR != err)
-		sasl_log_error(sound->sasl, "setup error!!!! %i", err);
+		sasl_log_error(sound->sasl, "Setup error %i", err);
 	alSourcePlay(source);
 	if (sound->sources[sampleId].timer) {
 		sound->sources[sampleId].timer->start();
@@ -505,7 +506,7 @@ static void playSound(struct SaslSoundCallbacks *s, int sampleId, int loop)
 
 	err = alGetError();
 	if (AL_NO_ERROR != err)
-		sasl_log_error(sound->sasl, "play error!!!! %i", err);
+		sasl_log_error(sound->sasl, "Play error %i", err);
 }
 
 
@@ -519,7 +520,7 @@ static void stopSound(struct SaslSoundCallbacks *s, int sampleId)
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourceStop(source);
+	alCheck(alSourceStop(source));
 	if (sound->sources[sampleId].timer) {
 		sound->sources[sampleId].timer->stop();
 	}
@@ -538,8 +539,8 @@ static void getSamplePlayingLeft(struct SaslSoundCallbacks *s, int sampleId, dou
 	ContextChanger changer(sound->getContextBySample(sampleId));
 	ALenum state;
 	ALint loop;
-	alGetSourcei(source, AL_SOURCE_STATE, &state);
-	alGetSourcei(source, AL_LOOPING, &loop);
+	alCheck(alGetSourcei(source, AL_SOURCE_STATE, &state));
+	alCheck(alGetSourcei(source, AL_LOOPING, &loop));
 
 	if (sound->sources[sampleId].timer) {
 		if (state == AL_PLAYING) {
@@ -582,7 +583,7 @@ static void setGain(struct SaslSoundCallbacks *s, int sampleId, int gain)
 
 	if (sound->scene & source.scene) {
 		ContextChanger changer(sound->getContextBySample(sampleId));
-		alSourcef(srcId, AL_GAIN, source.gain);
+		alCheck(alSourcef(srcId, AL_GAIN, source.gain));
 	}
 }
 
@@ -597,7 +598,7 @@ static void setPitch(struct SaslSoundCallbacks *s, int sampleId, int pitch)
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourcef(source, AL_PITCH, (float)pitch / 1000.0);
+	alCheck(alSourcef(source, AL_PITCH, (float)pitch / 1000.0));
 }
 
 
@@ -611,7 +612,7 @@ static void rewindSound(struct SaslSoundCallbacks *s, int sampleId)
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourceRewind(source);
+	alCheck(alSourceRewind(source));
 }
 
 
@@ -626,7 +627,7 @@ static int isPlaying(struct SaslSoundCallbacks *s, int sampleId)
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
 	ALenum state;
-	alGetSourcei(source, AL_SOURCE_STATE, &state);
+	alCheck(alGetSourcei(source, AL_SOURCE_STATE, &state));
 	return (state == AL_PLAYING);
 }
 
@@ -643,8 +644,7 @@ static void setMasterGain(struct SaslSoundCallbacks *s, int gain)
 		con_it != sound->contexts.end(); ++con_it) {
 
 		ContextChanger changer(*con_it);
-		alListenerf(AL_GAIN, (float)gain / 1000.0);
-
+		alCheck(alListenerf(AL_GAIN, (float)gain / 1000.0));
 	}
 }
 
@@ -664,9 +664,9 @@ static void setEnv(struct SaslSoundCallbacks *s, int sampleId, int scene)
 	source.scene = scene;
 
 	if (sound->scene & source.scene) {
-		alSourcef(srcId, AL_GAIN, source.gain);
+		alCheck(alSourcef(srcId, AL_GAIN, source.gain));
 	} else {
-		alSourcef(srcId, AL_GAIN, 0);
+		alCheck(alSourcef(srcId, AL_GAIN, 0));
 	}
 }
 
@@ -696,7 +696,7 @@ static void setPosition(struct SaslSoundCallbacks *s,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSource3f(source, AL_POSITION, x, y, z);
+	alCheck(alSource3f(source, AL_POSITION, x, y, z));
 }
 
 
@@ -713,7 +713,7 @@ static void getPosition(struct SaslSoundCallbacks *s,
 	float position[3];
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alGetSourcefv(source, AL_POSITION, position);
+	alCheck(alGetSourcefv(source, AL_POSITION, position));
 	if (x) *x = position[0];
 	if (y) *y = position[1];
 	if (z) *z = position[2];
@@ -731,7 +731,7 @@ static void setDirection(struct SaslSoundCallbacks *s,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSource3f(source, AL_DIRECTION, x, y, z);
+	alCheck(alSource3f(source, AL_DIRECTION, x, y, z));
 }
 
 
@@ -748,14 +748,14 @@ static void getDirection(struct SaslSoundCallbacks *s,
 	float position[3];
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alGetSourcefv(source, AL_DIRECTION, position);
+	alCheck(alGetSourcefv(source, AL_DIRECTION, position));
 	if (x) *x = position[0];
 	if (y) *y = position[1];
 	if (z) *z = position[2];
 }
 
 
-// Set maximum sample disatance
+// Set maximum sample distance
 static void setMaxDistance(struct SaslSoundCallbacks *s, int sampleId,
 	float distance)
 {
@@ -766,7 +766,7 @@ static void setMaxDistance(struct SaslSoundCallbacks *s, int sampleId,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourcef(source, AL_MAX_DISTANCE, distance);
+	alCheck(alSourcef(source, AL_MAX_DISTANCE, distance));
 }
 
 // Set rolloff factor
@@ -780,7 +780,7 @@ static void setRolloff(struct SaslSoundCallbacks *s, int sampleId,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourcef(source, AL_ROLLOFF_FACTOR, rolloff);
+	alCheck(alSourcef(source, AL_ROLLOFF_FACTOR, rolloff));
 }
 
 
@@ -795,7 +795,7 @@ static void setRefDistance(struct SaslSoundCallbacks *s, int sampleId,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourcef(source, AL_REFERENCE_DISTANCE, distance);
+	alCheck(alSourcef(source, AL_REFERENCE_DISTANCE, distance));
 }
 
 // Set sound cone parameters
@@ -809,9 +809,9 @@ static void setCone(struct SaslSoundCallbacks *s, int sampleId,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourcef(source, AL_CONE_OUTER_GAIN, outerGain);
-	alSourcef(source, AL_CONE_INNER_ANGLE, innerAngle);
-	alSourcef(source, AL_CONE_OUTER_ANGLE, outerAngle);
+	alCheck(alSourcef(source, AL_CONE_OUTER_GAIN, outerGain));
+	alCheck(alSourcef(source, AL_CONE_INNER_ANGLE, innerAngle));
+	alCheck(alSourcef(source, AL_CONE_OUTER_ANGLE, outerAngle));
 }
 
 
@@ -827,11 +827,11 @@ static void getCone(struct SaslSoundCallbacks *s, int sampleId,
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
 	if (outerGain)
-		alGetSourcef(source, AL_CONE_OUTER_GAIN, outerGain);
+		alCheck(alGetSourcef(source, AL_CONE_OUTER_GAIN, outerGain));
 	if (innerAngle)
-		alGetSourcef(source, AL_CONE_INNER_ANGLE, innerAngle);
+		alCheck(alGetSourcef(source, AL_CONE_INNER_ANGLE, innerAngle));
 	if (outerAngle)
-		alGetSourcef(source, AL_CONE_OUTER_ANGLE, outerAngle);
+		alCheck(alGetSourcef(source, AL_CONE_OUTER_ANGLE, outerAngle));
 }
 
 
@@ -846,7 +846,7 @@ static void setRelative(struct SaslSoundCallbacks *s, int sampleId,
 	}
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
-	alSourcei(source, AL_SOURCE_RELATIVE, relative);
+	alCheck(alSourcei(source, AL_SOURCE_RELATIVE, relative));
 }
 
 
@@ -861,7 +861,7 @@ static int getRelative(struct SaslSoundCallbacks *s, int sampleId)
 
 	ContextChanger changer(sound->getContextBySample(sampleId));
 	int res = 0;
-	alGetSourcei(source, AL_SOURCE_RELATIVE, &res);
+	alCheck(alGetSourcei(source, AL_SOURCE_RELATIVE, &res));
 	return res;
 }
 
@@ -888,12 +888,12 @@ static void setListenerEnv(struct SaslSoundCallbacks *s, int scene)
 		for (std::map<int, Source>::iterator i = sound->sources.begin();
 			i != sound->sources.end(); ++i)
 		{
-			if ((std::size_t)((*i).first / sound->maxSourcesPerContext) == context_index) {
+			if ((std::size_t)(((*i).first - 1) / sound->maxSourcesPerContext) == context_index) {
 				Source &source = (*i).second;
 				if (scene & source.scene) {
-					alSourcef(source.id, AL_GAIN, source.gain);
+					alCheck(alSourcef(source.id, AL_GAIN, source.gain));
 				} else {
-					alSourcef(source.id, AL_GAIN, 0);
+					alCheck(alSourcef(source.id, AL_GAIN, 0));
 				}
 			}
 		}
@@ -914,7 +914,7 @@ static void setListenerPosition(struct SaslSoundCallbacks *s,
 		con_it != sound->contexts.end(); ++con_it) {
 
 		ContextChanger changer(*con_it);
-		alListener3f(AL_POSITION, x, y, z);
+		alCheck(alListener3f(AL_POSITION, x, y, z));
 	}
 }
 
@@ -932,7 +932,7 @@ static void getListenerPosition(struct SaslSoundCallbacks *s,
 
 	float position[3];
 
-	alGetListenerfv(AL_POSITION, position);
+	alCheck(alGetListenerfv(AL_POSITION, position));
 	if (x) *x = position[0];
 	if (y) *y = position[1];
 	if (z) *z = position[2];
@@ -952,7 +952,7 @@ static void setListenerOrientation(struct SaslSoundCallbacks *s,
 
 		ContextChanger changer(*con_it);
 		float orientation[] = { x, y, z, ux, uy, uz };
-		alListenerfv(AL_ORIENTATION, orientation);
+		alCheck(alListenerfv(AL_ORIENTATION, orientation));
 	}
 }
 
@@ -971,7 +971,7 @@ static void getListenerOrientation(struct SaslSoundCallbacks *s,
 
 	float orientation[6];
 
-	alGetListenerfv(AL_ORIENTATION, orientation);
+	alCheck(alGetListenerfv(AL_ORIENTATION, orientation));
 	if (x) *x = orientation[0];
 	if (y) *y = orientation[1];
 	if (z) *z = orientation[2];
@@ -1022,7 +1022,7 @@ SaslAlSound* sasl_init_al_sound(SASL sasl)
 	sound->devices.push_back(alcOpenDevice("Generic Software"));
 #endif // WINDOWS    
 
-	sound->contexts.push_back(alcCreateContext(sound->devices[0], NULL));
+	alcCheck(sound->contexts.push_back(alcCreateContext(sound->devices[0], NULL)), sound->devices[0]);
 	sound->curSourceNumber = 0;
 	sound->sasl = sasl;
 	sound->scene = 1;
@@ -1031,8 +1031,8 @@ SaslAlSound* sasl_init_al_sound(SASL sasl)
 
 	{
 		ContextChanger changer(sound->contexts[0]);
-		alcGetIntegerv(sound->devices[0], ALC_MONO_SOURCES, 1, &maxMonoPerContext);
-		alcGetIntegerv(sound->devices[0], ALC_STEREO_SOURCES, 1, &maxStereoPerContext);
+		alcCheck(alcGetIntegerv(sound->devices[0], ALC_MONO_SOURCES, 1, &maxMonoPerContext), sound->devices[0]);
+		alcCheck(alcGetIntegerv(sound->devices[0], ALC_STEREO_SOURCES, 1, &maxStereoPerContext), sound->devices[0]);
 	}
 
 	sound->maxSourcesPerContext = maxMonoPerContext;
@@ -1040,10 +1040,8 @@ SaslAlSound* sasl_init_al_sound(SASL sasl)
 	sound->maxSourcesPerContext = 255;
 #endif
 
-	// some magic
-	alGetError();
-
 	sasl_set_sound_engine(sasl, &sound->callbacks);
+	ALChecker::setSASL(sasl);
 
 	return sound;
 }
@@ -1066,9 +1064,9 @@ void sasl_done_al_sound(SaslAlSound *sound)
 		for (std::map<int, Source>::iterator i = sound->sources.begin();
 			i != sound->sources.end(); ++i)
 		{
-			if ((std::size_t)((*i).first / sound->maxSourcesPerContext) == context_index) {
+			if ((std::size_t)(((*i).first - 1) / sound->maxSourcesPerContext) == context_index) {
 				ALuint source = (*i).second.id;
-				alDeleteSources(1, &source);
+				alCheck(alDeleteSources(1, &source));
 				if ((*i).second.timer) {
 					delete (*i).second.timer;
 					(*i).second.timer = NULL;
@@ -1077,12 +1075,13 @@ void sasl_done_al_sound(SaslAlSound *sound)
 		}
 	}
 
-	// Buffers belongs to the device, so we may delete them without changing context
 	for (std::map<std::string, Buffer>::iterator i = sound->buffers.begin();
 		i != sound->buffers.end(); ++i)
 	{
+		ContextChanger changer(sound->contexts[0]);
+
 		ALuint buffer = (*i).second.id;
-		alDeleteBuffers(1, &buffer);
+		alCheck(alDeleteBuffers(1, &buffer));
 	}
 
 	sound->sources.clear();

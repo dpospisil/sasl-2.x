@@ -257,15 +257,19 @@ static void drawBegin(struct SaslGraphicsCallbacks *canvas)
 	assert(canvas);
 
 	glPushAttrib(GL_ALL_ATTRIB_BITS);
+#if !defined(APL)
 	glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
-
+#endif
+	
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_TEXTURE_2D);
 	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_SCISSOR_TEST);
 
+#if !defined(APL)
 	glEnableClientState(GL_VERTEX_ARRAY);
+#endif
 	glEnableClientState(GL_COLOR_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -369,8 +373,15 @@ static void drawEnd(struct SaslGraphicsCallbacks *canvas)
 
 	dumpBuffers(c);
 
+#if defined(APL)
+	glDisableClientState(GL_COLOR_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+#endif
+	
 	glPopAttrib();
+#if !defined(APL)
 	glPopClientAttrib();
+#endif
 	/*    printf("textures: %i (%i Kb) triangles: %i lines: %i  batches: %i\n",
 	c->textures, c->texturesSize / 1024, c->triangles, c->lines,
 	c->batches);
